@@ -14,6 +14,10 @@
             <div class="logo-group">
                 <span class="logo-badge">PRO</span>
                 <h1 class="title">SubSplit</h1>
+                <div id="versionBadge" class="version-badge" title="Нажмите для проверки обновлений">
+                    <span class="version-dot active"></span>
+                    <span id="versionText">v1.0.0</span>
+                </div>
             </div>
             <nav class="tabs-nav" role="tablist" aria-label="Разделы">
                 <button type="button" class="tab-btn active" id="tabBtnSubtitles" data-tab="tabSubtitles" role="tab" aria-selected="true">
@@ -31,6 +35,27 @@
                 </button>
             </nav>
         </header>
+
+        <!-- Update Banner (появляется при наличии свежей версии на GitHub) -->
+        <div id="updateBanner" class="update-banner" style="display: none;" role="alert">
+            <div class="update-content">
+                <div class="update-info">
+                    <div class="update-title">
+                        <span class="update-sparkle">✨</span>
+                        <strong>Доступно обновление <span id="updateNewVersion">v1.1.0</span></strong>
+                    </div>
+                    <div class="update-desc" id="updateReleaseNotes">Новая версия с улучшениями доступна на GitHub</div>
+                </div>
+                <div class="update-actions">
+                    <button type="button" class="btn-update-apply" id="btnApplyUpdate">Обновить</button>
+                    <button type="button" class="btn-update-dismiss" id="btnDismissUpdate" title="Закрыть">✕</button>
+                </div>
+            </div>
+            <div class="update-progress-bar" id="updateProgressBar" style="display: none;">
+                <div class="update-progress-fill" id="updateProgressFill"></div>
+            </div>
+            <div class="update-status-msg" id="updateStatusMsg" style="display: none;"></div>
+        </div>
 
         <!-- ==================================================================
              TAB 1: СУБТИТРЫ (SubSplit AI)
@@ -471,6 +496,7 @@
     <script src="CSInterface.js"></script>
     <script src="logger.js"></script>
     <script src="organizer.js"></script>
+    <script src="updater.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

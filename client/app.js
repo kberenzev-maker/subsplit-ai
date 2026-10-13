@@ -73,6 +73,15 @@ window.addEventListener('DOMContentLoaded', () => {
     refreshSequenceInfo();
     refreshProjectInfo();
     renderProtectedFolders();
+
+    try {
+        if (window.SubSplitUpdater) {
+            const bInfo = findBackendPaths();
+            window.SubSplitUpdater.init(bInfo);
+        }
+    } catch (eUp) {
+        console.warn("[Updater] Init error:", eUp);
+    }
 });
 
 let activePunctChars = new Set();

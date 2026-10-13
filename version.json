@@ -1,0 +1,7 @@
+{
+  "version": "1.0.0",
+  "build": 1,
+  "releaseName": "SubSplit AI Initial Release",
+  "releaseDate": "2026-10-14",
+  "description": "Apple Smooth Animations, слайдеры слов (1-10) и строк (1-3), Metal GPU ускорение"
+}
