@@ -165,12 +165,30 @@
 
                             <div class="accent-col-color">
                                 <span class="lang-label">Цвет акцента</span>
-                                <div class="accent-color-swatches" id="accentColorGroup" role="group" aria-label="Цвет акцентного слова">
+                                <div class="premiere-color-picker-box">
+                                    <div class="color-chip-container" title="Нажмите, чтобы открыть палитру">
+                                        <input type="color" id="accentColorPicker" class="native-color-input" value="#FFD60A" aria-label="Палитра цвета акцента">
+                                        <div class="color-chip-swatch" id="accentColorChip" style="background-color: #FFD60A;"></div>
+                                    </div>
+                                    <div class="hex-input-box">
+                                        <span class="hex-hash">#</span>
+                                        <input type="text" id="accentHexInput" class="hex-input" value="FFD60A" maxlength="7" spellcheck="false" placeholder="FFD60A" aria-label="HEX код цвета акцента">
+                                    </div>
+                                    <button type="button" class="btn-pipette" id="btnEyedropper" title="Пипетка (выбрать цвет на экране)" aria-label="Пипетка">
+                                        <svg class="sf-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                                            <path d="M12.5 1.5C13.0523 0.947715 13.9477 0.947715 14.5 1.5C15.0523 2.05228 15.0523 2.94772 14.5 3.5L11.5 6.5L9.5 4.5L12.5 1.5Z" fill="currentColor"/>
+                                            <path d="M8.5 5.5L10.5 7.5L5.5 12.5C5.1 12.9 4.5 13.1 4 13.1L2 13.5C1.7 13.5 1.5 13.3 1.5 13L1.9 11C2 10.5 2.2 9.9 2.6 9.5L8.5 5.5Z" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+                                            <path d="M1.5 13.5L0.5 15.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                                        </svg>
+                                    </button>
+                                </div>
+                                <div class="accent-color-swatches" id="accentColorGroup" role="group" aria-label="Быстрые цвета акцента">
                                     <button type="button" class="color-swatch active" data-color="#FFD60A" title="Жёлтый Captions" style="--swatch-color: #FFD60A;"></button>
                                     <button type="button" class="color-swatch" data-color="#FFFFFF" title="Чистый белый" style="--swatch-color: #FFFFFF;"></button>
                                     <button type="button" class="color-swatch" data-color="#30D158" title="Неоновый лайм" style="--swatch-color: #30D158;"></button>
                                     <button type="button" class="color-swatch" data-color="#5AC8FA" title="Голубой Apple" style="--swatch-color: #5AC8FA;"></button>
                                     <button type="button" class="color-swatch" data-color="#FF375F" title="Яркий коралл" style="--swatch-color: #FF375F;"></button>
+                                    <button type="button" class="color-swatch" data-color="#FF9500" title="Оранжевый" style="--swatch-color: #FF9500;"></button>
                                 </div>
                                 <input type="hidden" id="accentColorSelect" value="#FFD60A">
                             </div>
@@ -256,6 +274,32 @@
                             <button type="button" class="chip-opt" data-case="lower" title="все строчные">aa строчные</button>
                         </div>
                         <input type="hidden" id="textCaseSelect" value="default">
+                    </div>
+
+                    <!-- Основной цвет субтитров -->
+                    <div class="control-block">
+                        <div class="control-header">
+                            <label class="control-label">Основной цвет текста</label>
+                            <span class="control-status" id="baseColorStatusText">Белый #FFFFFF</span>
+                        </div>
+                        <div class="premiere-color-picker-box">
+                            <div class="color-chip-container" title="Нажмите, чтобы открыть палитру">
+                                <input type="color" id="baseColorPicker" class="native-color-input" value="#FFFFFF" aria-label="Основной цвет субтитров">
+                                <div class="color-chip-swatch" id="baseColorChip" style="background-color: #FFFFFF;"></div>
+                            </div>
+                            <div class="hex-input-box">
+                                <span class="hex-hash">#</span>
+                                <input type="text" id="baseHexInput" class="hex-input" value="FFFFFF" maxlength="7" spellcheck="false" placeholder="FFFFFF" aria-label="HEX код основного цвета">
+                            </div>
+                            <button type="button" class="btn-pipette" id="btnBaseEyedropper" title="Пипетка (выбрать цвет на экране)" aria-label="Пипетка">
+                                <svg class="sf-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                                    <path d="M12.5 1.5C13.0523 0.947715 13.9477 0.947715 14.5 1.5C15.0523 2.05228 15.0523 2.94772 14.5 3.5L11.5 6.5L9.5 4.5L12.5 1.5Z" fill="currentColor"/>
+                                    <path d="M8.5 5.5L10.5 7.5L5.5 12.5C5.1 12.9 4.5 13.1 4 13.1L2 13.5C1.7 13.5 1.5 13.3 1.5 13L1.9 11C2 10.5 2.2 9.9 2.6 9.5L8.5 5.5Z" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M1.5 13.5L0.5 15.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <input type="hidden" id="baseColorSelect" value="#FFFFFF">
                     </div>
 
                     <!-- Скрыть знаки -->

@@ -655,6 +655,9 @@ function pickSmartAccentWordIndex(words) {
 function parseHexToColorInt(hexStr, fallbackInt) {
     if (!hexStr) return fallbackInt;
     var clean = String(hexStr).replace(/[^0-9a-fA-F]/g, "");
+    if (clean.length === 3) {
+        clean = clean.charAt(0) + clean.charAt(0) + clean.charAt(1) + clean.charAt(1) + clean.charAt(2) + clean.charAt(2);
+    }
     if (clean.length !== 6) return fallbackInt;
     var num = parseInt(clean, 16);
     if (isNaN(num)) return fallbackInt;
@@ -741,7 +744,8 @@ function buildAppleTextDocPayload(textStr, isSecondaryTrack, seqW, seqH, accentI
     if (maxLines === 1 && words.length >= 4 && isVertical) {
         baseFontSize = Math.max(38, Math.round(56 * (3.8 / words.length)));
     }
-    var normalColorInt = isSecondaryTrack ? 14540253 : 16777215; // #DDDDDD vs #FFFFFF
+    var baseColorHex = cfg.baseColorHex || "#FFFFFF";
+    var normalColorInt = isSecondaryTrack ? 14540253 : parseHexToColorInt(baseColorHex, 16777215);
     var fontName = isSecondaryTrack ? "HelveticaNeue-Medium" : "HelveticaNeue-Bold";
 
     var scaleRatio = Number(cfg.scaleRatio) || 1.72;

@@ -381,18 +381,7 @@ function setupEventListeners() {
         });
     });
 
-    document.querySelectorAll('.color-swatch').forEach(swatch => {
-        swatch.addEventListener('click', () => {
-            const val = swatch.getAttribute('data-color');
-            document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
-            swatch.classList.add('active');
-            const hiddenInput = document.getElementById('accentColorSelect');
-            if (hiddenInput) hiddenInput.value = val;
-            if (timelineAccentCues.length > 0) {
-                batchUpdateTimelineAccentsFromUI('restyle');
-            }
-        });
-    });
+    setupColorControls();
 
     const checkAccentStackLine = document.getElementById('checkAccentStackLine');
     if (checkAccentStackLine) {
@@ -442,10 +431,184 @@ function setupEventListeners() {
 let timelineAccentCues = [];
 let activeAccentTrackIndex = -1;
 
+function normalizeHexColor(val) {
+    if (!val) return null;
+    let clean = String(val).trim().replace(/^#/, '').replace(/[^0-9a-fA-F]/g, '');
+    if (clean.length === 3) {
+        clean = clean.split('').map(c => c + c).join('');
+    }
+    if (clean.length === 6) {
+        return '#' + clean.toUpperCase();
+    }
+    return null;
+}
+
+function setAccentColor(hex, source = 'code') {
+    const norm = normalizeHexColor(hex);
+    if (!norm) return;
+
+    const picker = document.getElementById('accentColorPicker');
+    const chip = document.getElementById('accentColorChip');
+    const hexInput = document.getElementById('accentHexInput');
+    const hidden = document.getElementById('accentColorSelect');
+
+    if (chip) chip.style.backgroundColor = norm;
+    if (picker && source !== 'picker') picker.value = norm;
+    if (hexInput && source !== 'input') hexInput.value = norm.replace(/^#/, '');
+    if (hidden) hidden.value = norm;
+
+    // Обновляем подсветку активного пресета
+    document.querySelectorAll('#accentColorGroup .color-swatch').forEach(s => {
+        const c = normalizeHexColor(s.getAttribute('data-color'));
+        if (c && c.toUpperCase() === norm.toUpperCase()) {
+            s.classList.add('active');
+        } else {
+            s.classList.remove('active');
+        }
+    });
+
+    if (timelineAccentCues && timelineAccentCues.length > 0) {
+        batchUpdateTimelineAccentsFromUI('restyle');
+    }
+}
+
+function setBaseColor(hex, source = 'code') {
+    const norm = normalizeHexColor(hex);
+    if (!norm) return;
+
+    const picker = document.getElementById('baseColorPicker');
+    const chip = document.getElementById('baseColorChip');
+    const hexInput = document.getElementById('baseHexInput');
+    const hidden = document.getElementById('baseColorSelect');
+    const statusText = document.getElementById('baseColorStatusText');
+
+    if (chip) chip.style.backgroundColor = norm;
+    if (picker && source !== 'picker') picker.value = norm;
+    if (hexInput && source !== 'input') hexInput.value = norm.replace(/^#/, '');
+    if (hidden) hidden.value = norm;
+    if (statusText) statusText.textContent = norm;
+
+    if (timelineAccentCues && timelineAccentCues.length > 0) {
+        batchUpdateTimelineAccentsFromUI('restyle');
+    }
+}
+
+function setupColorControls() {
+    // 1. Accent Color
+    const accentPicker = document.getElementById('accentColorPicker');
+    const accentHex = document.getElementById('accentHexInput');
+    const btnEye = document.getElementById('btnEyedropper');
+
+    if (accentPicker) {
+        accentPicker.addEventListener('input', (e) => {
+            setAccentColor(e.target.value, 'picker');
+        });
+    }
+
+    if (accentHex) {
+        accentHex.addEventListener('input', (e) => {
+            const val = e.target.value;
+            const norm = normalizeHexColor(val);
+            if (norm) {
+                setAccentColor(norm, 'input');
+            }
+        });
+
+        accentHex.addEventListener('blur', (e) => {
+            const hidden = document.getElementById('accentColorSelect');
+            const cur = hidden ? hidden.value : '#FFD60A';
+            e.target.value = cur.replace(/^#/, '').toUpperCase();
+        });
+
+        accentHex.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.target.blur();
+            }
+        });
+    }
+
+    if (btnEye) {
+        btnEye.addEventListener('click', async () => {
+            if (window.EyeDropper) {
+                try {
+                    const eyeDropper = new EyeDropper();
+                    const res = await eyeDropper.open();
+                    if (res && res.sRGBHex) {
+                        setAccentColor(res.sRGBHex, 'eyedropper');
+                    }
+                } catch (err) {
+                    // Canceled by user
+                }
+            } else if (accentPicker) {
+                accentPicker.click();
+            }
+        });
+    }
+
+    document.querySelectorAll('#accentColorGroup .color-swatch').forEach(swatch => {
+        swatch.addEventListener('click', () => {
+            const val = swatch.getAttribute('data-color');
+            setAccentColor(val, 'swatch');
+        });
+    });
+
+    // 2. Base Text Color
+    const basePicker = document.getElementById('baseColorPicker');
+    const baseHex = document.getElementById('baseHexInput');
+    const btnBaseEye = document.getElementById('btnBaseEyedropper');
+
+    if (basePicker) {
+        basePicker.addEventListener('input', (e) => {
+            setBaseColor(e.target.value, 'picker');
+        });
+    }
+
+    if (baseHex) {
+        baseHex.addEventListener('input', (e) => {
+            const val = e.target.value;
+            const norm = normalizeHexColor(val);
+            if (norm) {
+                setBaseColor(norm, 'input');
+            }
+        });
+
+        baseHex.addEventListener('blur', (e) => {
+            const hidden = document.getElementById('baseColorSelect');
+            const cur = hidden ? hidden.value : '#FFFFFF';
+            e.target.value = cur.replace(/^#/, '').toUpperCase();
+        });
+
+        baseHex.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.target.blur();
+            }
+        });
+    }
+
+    if (btnBaseEye) {
+        btnBaseEye.addEventListener('click', async () => {
+            if (window.EyeDropper) {
+                try {
+                    const eyeDropper = new EyeDropper();
+                    const res = await eyeDropper.open();
+                    if (res && res.sRGBHex) {
+                        setBaseColor(res.sRGBHex, 'eyedropper');
+                    }
+                } catch (err) {
+                    // Canceled by user
+                }
+            } else if (basePicker) {
+                basePicker.click();
+            }
+        });
+    }
+}
+
 function getAccentConfig() {
     const checkAutoAccent = document.getElementById('checkAutoAccent');
     const scaleEl = document.getElementById('accentScaleSelect');
     const colorEl = document.getElementById('accentColorSelect');
+    const baseColorEl = document.getElementById('baseColorSelect');
     const stackEl = document.getElementById('checkAccentStackLine');
     const upperEl = document.getElementById('checkAccentUpper');
     const linesEl = document.getElementById('maxLinesSelect') || document.getElementById('maxLinesSlider');
@@ -457,6 +620,7 @@ function getAccentConfig() {
         autoAccent: isEnabled,
         scaleRatio: scaleEl ? parseFloat(scaleEl.value) || 1.75 : 1.75,
         colorHex: colorEl ? colorEl.value : '#FFD60A',
+        baseColorHex: baseColorEl ? baseColorEl.value : '#FFFFFF',
         stackLine: (maxLines > 1 && stackEl) ? stackEl.checked : false,
         upperCase: upperEl ? upperEl.checked : true,
         maxLines: maxLines

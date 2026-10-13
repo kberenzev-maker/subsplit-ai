@@ -1,7 +1,7 @@
 {
-  "version": "1.0.1",
-  "build": 2,
-  "releaseName": "In-App Auto-Updater & Release Protocol",
+  "version": "1.0.2",
+  "build": 3,
+  "releaseName": "HEX Color Picker & Eyedropper",
   "releaseDate": "2026-10-14",
-  "description": "Встроенный автоапдейтер плагина в 1 клик и правила релизов"
+  "description": "Выбор цвета по HEX коду в стиле Premiere Pro, пипетка и настройка основного цвета текста"
 }
