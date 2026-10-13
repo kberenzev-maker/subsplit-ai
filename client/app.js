@@ -422,10 +422,26 @@ function setupEventListeners() {
         });
     }
 
-    // Подгружаем субтитры с активного таймлайна при старте панели
+    // Подгружаем субтитры с активного таймлайна при старте панели с повторами (пока Premiere Pro загружает проект)
+    setTimeout(() => { loadTimelineCuesForAccentEditor(false); }, 700);
     setTimeout(() => {
-        loadTimelineCuesForAccentEditor(false);
-    }, 600);
+        if (!timelineAccentCues || timelineAccentCues.length === 0) {
+            loadTimelineCuesForAccentEditor(false);
+        }
+    }, 2000);
+    setTimeout(() => {
+        if (!timelineAccentCues || timelineAccentCues.length === 0) {
+            loadTimelineCuesForAccentEditor(false);
+        }
+    }, 4500);
+
+    // Автоматическая синхронизация при возврате фокуса в окно панели
+    window.addEventListener('focus', () => {
+        refreshSequenceInfo();
+        if (!timelineAccentCues || timelineAccentCues.length === 0) {
+            loadTimelineCuesForAccentEditor(false);
+        }
+    });
 }
 
 let timelineAccentCues = [];
@@ -443,29 +459,353 @@ function normalizeHexColor(val) {
     return null;
 }
 
+// ============================================================================
+// In-Panel Color Picker Popover Controller (100% Crash-Free Web Component)
+// ============================================================================
+const colorPickerState = {
+    isOpen: false,
+    activeTarget: null, // 'accent' | 'base'
+    hue: 50,
+    sat: 1,
+    val: 1,
+    isDragging: false,
+    initialized: false
+};
+
+function hexToRgb(hex) {
+    let clean = (hex || '').replace(/^#/, '');
+    if (clean.length === 3) clean = clean.split('').map(c => c + c).join('');
+    if (clean.length !== 6) return { r: 255, g: 255, b: 255 };
+    const num = parseInt(clean, 16);
+    return { r: (num >> 16) & 255, g: (num >> 8) & 255, b: num & 255 };
+}
+
+function rgbToHsv(r, g, b) {
+    r /= 255; g /= 255; b /= 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    const d = max - min;
+    const v = max;
+    const s = max === 0 ? 0 : d / max;
+    let h = 0;
+    if (max !== min) {
+        switch (max) {
+            case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+            case g: h = (b - r) / d + 2; break;
+            case b: h = (r - g) / d + 4; break;
+        }
+        h /= 6;
+    }
+    return { h: Math.round(h * 360), s, v };
+}
+
+function hexToHsv(hex) {
+    const rgb = hexToRgb(hex);
+    return rgbToHsv(rgb.r, rgb.g, rgb.b);
+}
+
+function hsvToRgb(h, s, v) {
+    h = (h % 360 + 360) % 360;
+    const c = v * s;
+    const x = c * (1 - Math.abs((h / 60) % 2 - 1));
+    const m = v - c;
+    let r = 0, g = 0, b = 0;
+    if (h < 60) { r = c; g = x; b = 0; }
+    else if (h < 120) { r = x; g = c; b = 0; }
+    else if (h < 180) { r = 0; g = c; b = x; }
+    else if (h < 240) { r = 0; g = x; b = c; }
+    else if (h < 300) { r = x; g = 0; b = c; }
+    else { r = c; g = 0; b = x; }
+    return {
+        r: Math.round((r + m) * 255),
+        g: Math.round((g + m) * 255),
+        b: Math.round((b + m) * 255)
+    };
+}
+
+function rgbToHex(r, g, b) {
+    const toHex = (n) => {
+        const hex = Math.max(0, Math.min(255, Math.round(n))).toString(16);
+        return hex.length === 1 ? '0' + hex : hex;
+    };
+    return ('#' + toHex(r) + toHex(g) + toHex(b)).toUpperCase();
+}
+
+function hsvToHex(h, s, v) {
+    const rgb = hsvToRgb(h, s, v);
+    return rgbToHex(rgb.r, rgb.g, rgb.b);
+}
+
+function drawColorSatValCanvas(hue) {
+    const canvas = document.getElementById('colorSatValCanvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const width = canvas.width;
+    const height = canvas.height;
+
+    // Horizontal: white -> full hue color
+    const gradH = ctx.createLinearGradient(0, 0, width, 0);
+    gradH.addColorStop(0, '#FFFFFF');
+    gradH.addColorStop(1, `hsl(${hue}, 100%, 50%)`);
+    ctx.fillStyle = gradH;
+    ctx.fillRect(0, 0, width, height);
+
+    // Vertical: transparent -> black
+    const gradV = ctx.createLinearGradient(0, 0, 0, height);
+    gradV.addColorStop(0, 'rgba(0, 0, 0, 0)');
+    gradV.addColorStop(1, '#000000');
+    ctx.fillStyle = gradV;
+    ctx.fillRect(0, 0, width, height);
+}
+
+function updateCanvasCursor(sat, val) {
+    const cursor = document.getElementById('colorCanvasCursor');
+    if (!cursor) return;
+    cursor.style.left = `${Math.max(0, Math.min(1, sat)) * 100}%`;
+    cursor.style.top = `${Math.max(0, Math.min(1, 1 - val)) * 100}%`;
+}
+
+function updatePopoverPreview(hex) {
+    const swatch = document.getElementById('popoverCurrentSwatch');
+    const badge = document.getElementById('popoverHexBadge');
+    if (swatch) swatch.style.backgroundColor = hex;
+    if (badge) badge.textContent = hex;
+}
+
+function applyCurrentPopoverColor() {
+    const hex = hsvToHex(colorPickerState.hue, colorPickerState.sat, colorPickerState.val);
+    updatePopoverPreview(hex);
+    if (colorPickerState.activeTarget === 'accent') {
+        setAccentColor(hex, 'popover');
+    } else if (colorPickerState.activeTarget === 'base') {
+        setBaseColor(hex, 'popover');
+    }
+}
+
+function positionColorPickerPopover(anchorEl) {
+    const popover = document.getElementById('colorPickerPopover');
+    if (!popover || !anchorEl) return;
+
+    const rect = anchorEl.getBoundingClientRect();
+    const popWidth = popover.offsetWidth || 228;
+    const popHeight = popover.offsetHeight || 220;
+
+    let top = rect.bottom + 8;
+    if (top + popHeight > window.innerHeight - 10) {
+        if (rect.top - popHeight - 8 >= 10) {
+            top = rect.top - popHeight - 8;
+        } else {
+            top = Math.max(10, window.innerHeight - popHeight - 10);
+        }
+    }
+
+    // Center popover relative to anchor chip, constrained within window boundaries
+    let left = rect.left + (rect.width / 2) - (popWidth / 2);
+    if (left + popWidth > window.innerWidth - 12) {
+        left = window.innerWidth - popWidth - 12;
+    }
+    if (left < 12) {
+        left = 12;
+    }
+
+    popover.style.top = `${Math.round(top)}px`;
+    popover.style.left = `${Math.round(left)}px`;
+}
+
+function openColorPickerPopover(target, anchorEl) {
+    const popover = document.getElementById('colorPickerPopover');
+    if (!popover) return;
+
+    if (colorPickerState.isOpen && colorPickerState.activeTarget === target) {
+        closeColorPickerPopover();
+        return;
+    }
+
+    let currentHex = (target === 'accent')
+        ? (document.getElementById('accentColorSelect')?.value || '#FFD60A')
+        : (document.getElementById('baseColorSelect')?.value || '#FFFFFF');
+    currentHex = normalizeHexColor(currentHex) || (target === 'accent' ? '#FFD60A' : '#FFFFFF');
+
+    const hsv = hexToHsv(currentHex);
+    colorPickerState.activeTarget = target;
+    colorPickerState.hue = (hsv.s === 0 && colorPickerState.hue !== undefined) ? colorPickerState.hue : hsv.h;
+    colorPickerState.sat = hsv.s;
+    colorPickerState.val = hsv.v;
+    colorPickerState.isOpen = true;
+
+    const titleEl = document.getElementById('popoverTitle');
+    if (titleEl) {
+        titleEl.textContent = target === 'accent' ? 'Цвет акцента' : 'Основной цвет';
+    }
+
+    const sliderEl = document.getElementById('colorHueSlider');
+    if (sliderEl) sliderEl.value = Math.round(colorPickerState.hue);
+
+    drawColorSatValCanvas(colorPickerState.hue);
+    updateCanvasCursor(colorPickerState.sat, colorPickerState.val);
+    updatePopoverPreview(currentHex);
+
+    popover.style.display = 'flex';
+    positionColorPickerPopover(anchorEl);
+}
+
+function closeColorPickerPopover() {
+    const popover = document.getElementById('colorPickerPopover');
+    if (popover) popover.style.display = 'none';
+    colorPickerState.isOpen = false;
+    colorPickerState.activeTarget = null;
+    colorPickerState.isDragging = false;
+}
+
+function initColorPickerPopoverEvents() {
+    if (colorPickerState.initialized) return;
+    colorPickerState.initialized = true;
+
+    const canvasWrapper = document.getElementById('colorCanvasWrapper');
+    const hueSlider = document.getElementById('colorHueSlider');
+    const btnClose = document.getElementById('btnCloseColorPicker');
+    const popover = document.getElementById('colorPickerPopover');
+
+    const handlePointerCoord = (e) => {
+        const canvas = document.getElementById('colorSatValCanvas');
+        if (!canvas) return;
+        const rect = canvas.getBoundingClientRect();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+        const x = Math.max(0, Math.min(rect.width, clientX - rect.left));
+        const y = Math.max(0, Math.min(rect.height, clientY - rect.top));
+
+        colorPickerState.sat = x / rect.width;
+        colorPickerState.val = 1 - (y / rect.height);
+
+        updateCanvasCursor(colorPickerState.sat, colorPickerState.val);
+        applyCurrentPopoverColor();
+    };
+
+    if (canvasWrapper) {
+        canvasWrapper.addEventListener('mousedown', (e) => {
+            colorPickerState.isDragging = true;
+            handlePointerCoord(e);
+        });
+        canvasWrapper.addEventListener('touchstart', (e) => {
+            colorPickerState.isDragging = true;
+            handlePointerCoord(e);
+        }, { passive: false });
+    }
+
+    window.addEventListener('mousemove', (e) => {
+        if (colorPickerState.isDragging) {
+            e.preventDefault();
+            handlePointerCoord(e);
+        }
+    });
+
+    window.addEventListener('touchmove', (e) => {
+        if (colorPickerState.isDragging) {
+            e.preventDefault();
+            handlePointerCoord(e);
+        }
+    }, { passive: false });
+
+    window.addEventListener('mouseup', () => {
+        colorPickerState.isDragging = false;
+    });
+
+    window.addEventListener('touchend', () => {
+        colorPickerState.isDragging = false;
+    });
+
+    if (hueSlider) {
+        hueSlider.addEventListener('input', (e) => {
+            colorPickerState.hue = parseFloat(e.target.value);
+            drawColorSatValCanvas(colorPickerState.hue);
+            applyCurrentPopoverColor();
+        });
+    }
+
+    if (btnClose) {
+        btnClose.addEventListener('click', (e) => {
+            e.stopPropagation();
+            closeColorPickerPopover();
+        });
+    }
+
+    // Curated Swatches
+    const swatches = document.querySelectorAll('.pop-swatch');
+    swatches.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const hex = btn.getAttribute('data-color');
+            if (!hex) return;
+            const hsv = hexToHsv(hex);
+            colorPickerState.hue = hsv.h;
+            colorPickerState.sat = hsv.s;
+            colorPickerState.val = hsv.v;
+            if (hueSlider) hueSlider.value = Math.round(colorPickerState.hue);
+            drawColorSatValCanvas(colorPickerState.hue);
+            updateCanvasCursor(colorPickerState.sat, colorPickerState.val);
+            applyCurrentPopoverColor();
+        });
+    });
+
+    // Close on outside click
+    document.addEventListener('pointerdown', (e) => {
+        if (!colorPickerState.isOpen) return;
+        const accentBtn = document.getElementById('accentColorChipBtn');
+        const baseBtn = document.getElementById('baseColorChipBtn');
+        if (popover && !popover.contains(e.target) &&
+            (!accentBtn || !accentBtn.contains(e.target)) &&
+            (!baseBtn || !baseBtn.contains(e.target))) {
+            closeColorPickerPopover();
+        }
+    });
+
+    // Close on Escape
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && colorPickerState.isOpen) {
+            closeColorPickerPopover();
+        }
+    });
+
+    // Reposition on window resize
+    window.addEventListener('resize', () => {
+        if (colorPickerState.isOpen) {
+            const anchor = colorPickerState.activeTarget === 'accent'
+                ? document.getElementById('accentColorChipBtn')
+                : document.getElementById('baseColorChipBtn');
+            if (anchor) positionColorPickerPopover(anchor);
+        }
+    });
+}
+
+function promptNativeColorPicker(initialHex, callback) {
+    const chip = document.getElementById('accentColorChipBtn');
+    openColorPickerPopover('accent', chip);
+}
+
 function setAccentColor(hex, source = 'code') {
     const norm = normalizeHexColor(hex);
     if (!norm) return;
 
-    const picker = document.getElementById('accentColorPicker');
     const chip = document.getElementById('accentColorChip');
     const hexInput = document.getElementById('accentHexInput');
     const hidden = document.getElementById('accentColorSelect');
 
     if (chip) chip.style.backgroundColor = norm;
-    if (picker && source !== 'picker') picker.value = norm;
     if (hexInput && source !== 'input') hexInput.value = norm.replace(/^#/, '');
     if (hidden) hidden.value = norm;
 
-    // Обновляем подсветку активного пресета
-    document.querySelectorAll('#accentColorGroup .color-swatch').forEach(s => {
-        const c = normalizeHexColor(s.getAttribute('data-color'));
-        if (c && c.toUpperCase() === norm.toUpperCase()) {
-            s.classList.add('active');
-        } else {
-            s.classList.remove('active');
-        }
-    });
+    if (colorPickerState.isOpen && colorPickerState.activeTarget === 'accent' && source !== 'popover') {
+        const hsv = hexToHsv(norm);
+        colorPickerState.hue = (hsv.s === 0 && colorPickerState.hue !== undefined) ? colorPickerState.hue : hsv.h;
+        colorPickerState.sat = hsv.s;
+        colorPickerState.val = hsv.v;
+        const sliderEl = document.getElementById('colorHueSlider');
+        if (sliderEl) sliderEl.value = Math.round(colorPickerState.hue);
+        drawColorSatValCanvas(colorPickerState.hue);
+        updateCanvasCursor(colorPickerState.sat, colorPickerState.val);
+        updatePopoverPreview(norm);
+    }
 
     if (timelineAccentCues && timelineAccentCues.length > 0) {
         batchUpdateTimelineAccentsFromUI('restyle');
@@ -476,17 +816,27 @@ function setBaseColor(hex, source = 'code') {
     const norm = normalizeHexColor(hex);
     if (!norm) return;
 
-    const picker = document.getElementById('baseColorPicker');
     const chip = document.getElementById('baseColorChip');
     const hexInput = document.getElementById('baseHexInput');
     const hidden = document.getElementById('baseColorSelect');
     const statusText = document.getElementById('baseColorStatusText');
 
     if (chip) chip.style.backgroundColor = norm;
-    if (picker && source !== 'picker') picker.value = norm;
     if (hexInput && source !== 'input') hexInput.value = norm.replace(/^#/, '');
     if (hidden) hidden.value = norm;
     if (statusText) statusText.textContent = norm;
+
+    if (colorPickerState.isOpen && colorPickerState.activeTarget === 'base' && source !== 'popover') {
+        const hsv = hexToHsv(norm);
+        colorPickerState.hue = (hsv.s === 0 && colorPickerState.hue !== undefined) ? colorPickerState.hue : hsv.h;
+        colorPickerState.sat = hsv.s;
+        colorPickerState.val = hsv.v;
+        const sliderEl = document.getElementById('colorHueSlider');
+        if (sliderEl) sliderEl.value = Math.round(colorPickerState.hue);
+        drawColorSatValCanvas(colorPickerState.hue);
+        updateCanvasCursor(colorPickerState.sat, colorPickerState.val);
+        updatePopoverPreview(norm);
+    }
 
     if (timelineAccentCues && timelineAccentCues.length > 0) {
         batchUpdateTimelineAccentsFromUI('restyle');
@@ -494,14 +844,16 @@ function setBaseColor(hex, source = 'code') {
 }
 
 function setupColorControls() {
+    initColorPickerPopoverEvents();
+
     // 1. Accent Color
-    const accentPicker = document.getElementById('accentColorPicker');
+    const accentChipBtn = document.getElementById('accentColorChipBtn');
     const accentHex = document.getElementById('accentHexInput');
     const btnEye = document.getElementById('btnEyedropper');
 
-    if (accentPicker) {
-        accentPicker.addEventListener('input', (e) => {
-            setAccentColor(e.target.value, 'picker');
+    if (accentChipBtn) {
+        accentChipBtn.addEventListener('click', () => {
+            openColorPickerPopover('accent', accentChipBtn);
         });
     }
 
@@ -537,29 +889,22 @@ function setupColorControls() {
                         setAccentColor(res.sRGBHex, 'eyedropper');
                     }
                 } catch (err) {
-                    // Canceled by user
+                    // Отменено пользователем
                 }
-            } else if (accentPicker) {
-                accentPicker.click();
+            } else {
+                openColorPickerPopover('accent', accentChipBtn);
             }
         });
     }
 
-    document.querySelectorAll('#accentColorGroup .color-swatch').forEach(swatch => {
-        swatch.addEventListener('click', () => {
-            const val = swatch.getAttribute('data-color');
-            setAccentColor(val, 'swatch');
-        });
-    });
-
     // 2. Base Text Color
-    const basePicker = document.getElementById('baseColorPicker');
+    const baseChipBtn = document.getElementById('baseColorChipBtn');
     const baseHex = document.getElementById('baseHexInput');
     const btnBaseEye = document.getElementById('btnBaseEyedropper');
 
-    if (basePicker) {
-        basePicker.addEventListener('input', (e) => {
-            setBaseColor(e.target.value, 'picker');
+    if (baseChipBtn) {
+        baseChipBtn.addEventListener('click', () => {
+            openColorPickerPopover('base', baseChipBtn);
         });
     }
 
@@ -595,10 +940,10 @@ function setupColorControls() {
                         setBaseColor(res.sRGBHex, 'eyedropper');
                     }
                 } catch (err) {
-                    // Canceled by user
+                    // Отменено пользователем
                 }
-            } else if (basePicker) {
-                basePicker.click();
+            } else {
+                openColorPickerPopover('base', baseChipBtn);
             }
         });
     }
@@ -643,7 +988,7 @@ function loadTimelineCuesForAccentEditor(verboseLog) {
         try {
             const res = JSON.parse(resStr);
             const cueBadge = document.getElementById('accentCueBadge');
-            if (res && res.status === 'success' && Array.isArray(res.cues)) {
+            if (res && res.status === 'success' && Array.isArray(res.cues) && res.cues.length > 0) {
                 activeAccentTrackIndex = (typeof res.trackIndex === 'number') ? res.trackIndex : -1;
                 timelineAccentCues = res.cues.map(c => ({
                     ...c,
@@ -653,15 +998,45 @@ function loadTimelineCuesForAccentEditor(verboseLog) {
                     cueBadge.textContent = `${timelineAccentCues.length} фраз`;
                 }
                 renderAccentPhrasesList();
+                try {
+                    localStorage.setItem('subsplit_last_cues', JSON.stringify({
+                        trackIndex: activeAccentTrackIndex,
+                        cues: timelineAccentCues,
+                        timestamp: Date.now()
+                    }));
+                } catch (lsE) {}
                 if (verboseLog) {
-                    log(`🎯 Загружено фраз с таймлайна V${res.trackIndex + 1}: ${res.cues.length}. Кликайте по словам для акцента!`);
+                    const trackLabel = (typeof res.videoTrack === 'number') ? `V${res.videoTrack}` : `V${res.trackIndex + 1}`;
+                    log(`🎯 Найдено субтитров на таймлайне (${trackLabel}): ${res.cues.length} фраз. Кликайте по словам для акцента!`);
                 }
             } else {
-                if (cueBadge) {
+                let restoredFromCache = false;
+                if (!timelineAccentCues || timelineAccentCues.length === 0) {
+                    try {
+                        const cachedStr = localStorage.getItem('subsplit_last_cues');
+                        if (cachedStr) {
+                            const cached = JSON.parse(cachedStr);
+                            if (cached && Array.isArray(cached.cues) && cached.cues.length > 0) {
+                                timelineAccentCues = cached.cues;
+                                activeAccentTrackIndex = cached.trackIndex || -1;
+                                if (cueBadge) cueBadge.textContent = `${timelineAccentCues.length} фраз`;
+                                renderAccentPhrasesList();
+                                restoredFromCache = true;
+                            }
+                        }
+                    } catch (eCache) {}
+                }
+                if (!restoredFromCache && cueBadge) {
                     cueBadge.textContent = '0 фраз';
                 }
-                if (verboseLog && res && res.error) {
-                    log(`ℹ️ ${res.error}`);
+                if (verboseLog) {
+                    if (res && res.error) {
+                        log(`ℹ️ ${res.error}`);
+                    } else if (res && res.message) {
+                        log(`ℹ️ ${res.message}`);
+                    } else {
+                        log(`ℹ️ На активном таймлайне пока нет слоев субтитров SubSplit.`);
+                    }
                 }
             }
         } catch (e) {
@@ -879,6 +1254,8 @@ function refreshSequenceInfo() {
                     indicatorEl.style.boxShadow = '0 0 6px rgba(48, 209, 88, 0.6)';
                 }
                 log(`Обнаружен таймлайн: ${data.sequenceName}`);
+                // Автоматически синхронизируем субтитры с обнаруженного таймлайна
+                loadTimelineCuesForAccentEditor(false);
             }
         } catch (e) {
             seqNameEl.textContent = 'Не удалось связаться с Premiere';

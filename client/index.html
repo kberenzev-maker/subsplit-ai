@@ -166,8 +166,7 @@
                             <div class="accent-col-color">
                                 <span class="lang-label">Цвет акцента</span>
                                 <div class="premiere-color-picker-box">
-                                    <div class="color-chip-container" title="Нажмите, чтобы открыть палитру">
-                                        <input type="color" id="accentColorPicker" class="native-color-input" value="#FFD60A" aria-label="Палитра цвета акцента">
+                                    <div class="color-chip-container" id="accentColorChipBtn" title="Нажмите, чтобы открыть палитру цвета" role="button" tabindex="0">
                                         <div class="color-chip-swatch" id="accentColorChip" style="background-color: #FFD60A;"></div>
                                     </div>
                                     <div class="hex-input-box">
@@ -181,14 +180,6 @@
                                             <path d="M1.5 13.5L0.5 15.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
                                         </svg>
                                     </button>
-                                </div>
-                                <div class="accent-color-swatches" id="accentColorGroup" role="group" aria-label="Быстрые цвета акцента">
-                                    <button type="button" class="color-swatch active" data-color="#FFD60A" title="Жёлтый Captions" style="--swatch-color: #FFD60A;"></button>
-                                    <button type="button" class="color-swatch" data-color="#FFFFFF" title="Чистый белый" style="--swatch-color: #FFFFFF;"></button>
-                                    <button type="button" class="color-swatch" data-color="#30D158" title="Неоновый лайм" style="--swatch-color: #30D158;"></button>
-                                    <button type="button" class="color-swatch" data-color="#5AC8FA" title="Голубой Apple" style="--swatch-color: #5AC8FA;"></button>
-                                    <button type="button" class="color-swatch" data-color="#FF375F" title="Яркий коралл" style="--swatch-color: #FF375F;"></button>
-                                    <button type="button" class="color-swatch" data-color="#FF9500" title="Оранжевый" style="--swatch-color: #FF9500;"></button>
                                 </div>
                                 <input type="hidden" id="accentColorSelect" value="#FFD60A">
                             </div>
@@ -283,8 +274,7 @@
                             <span class="control-status" id="baseColorStatusText">Белый #FFFFFF</span>
                         </div>
                         <div class="premiere-color-picker-box">
-                            <div class="color-chip-container" title="Нажмите, чтобы открыть палитру">
-                                <input type="color" id="baseColorPicker" class="native-color-input" value="#FFFFFF" aria-label="Основной цвет субтитров">
+                            <div class="color-chip-container" id="baseColorChipBtn" title="Нажмите, чтобы открыть палитру цвета" role="button" tabindex="0">
                                 <div class="color-chip-swatch" id="baseColorChip" style="background-color: #FFFFFF;"></div>
                             </div>
                             <div class="hex-input-box">
@@ -534,6 +524,42 @@
             <div id="logBox" class="log-box" role="log" aria-live="polite">SubSplit Studio готова к работе.
 Выберите «Создать субтитры» или перейдите в «Органайзер».</div>
         </section>
+
+        <!-- Floating In-Panel Color Picker Popover (100% Crash-Free) -->
+        <div id="colorPickerPopover" class="color-picker-popover" style="display: none;" role="dialog" aria-label="Выбор цвета">
+            <div class="popover-header">
+                <div class="popover-header-left">
+                    <span class="popover-preview-swatch" id="popoverCurrentSwatch" style="background-color: #FFD60A;"></span>
+                    <span class="popover-title" id="popoverTitle">Палитра</span>
+                </div>
+                <div class="popover-header-right">
+                    <span class="popover-hex-badge" id="popoverHexBadge">#FFD60A</span>
+                    <button type="button" class="btn-popover-close" id="btnCloseColorPicker" title="Закрыть">✕</button>
+                </div>
+            </div>
+            
+            <div class="popover-canvas-wrapper" id="colorCanvasWrapper">
+                <canvas id="colorSatValCanvas" width="200" height="110" class="color-sat-val-canvas"></canvas>
+                <div id="colorCanvasCursor" class="color-canvas-cursor"></div>
+            </div>
+
+            <div class="popover-hue-row">
+                <input type="range" id="colorHueSlider" class="hue-range-slider" min="0" max="360" value="50">
+            </div>
+
+            <div class="popover-swatches-grid">
+                <button type="button" class="pop-swatch" data-color="#FFD60A" title="Желтый Captions" style="--pc: #FFD60A;"></button>
+                <button type="button" class="pop-swatch" data-color="#FFFFFF" title="Белый" style="--pc: #FFFFFF;"></button>
+                <button type="button" class="pop-swatch" data-color="#30D158" title="Неоновый лайм" style="--pc: #30D158;"></button>
+                <button type="button" class="pop-swatch" data-color="#5AC8FA" title="Apple Cyan" style="--pc: #5AC8FA;"></button>
+                <button type="button" class="pop-swatch" data-color="#FF375F" title="Коралл" style="--pc: #FF375F;"></button>
+                <button type="button" class="pop-swatch" data-color="#FF9500" title="Оранжевый" style="--pc: #FF9500;"></button>
+                <button type="button" class="pop-swatch" data-color="#AF52DE" title="Фиолетовый" style="--pc: #AF52DE;"></button>
+                <button type="button" class="pop-swatch" data-color="#FF2D55" title="Розовый" style="--pc: #FF2D55;"></button>
+                <button type="button" class="pop-swatch" data-color="#E5E7EB" title="Светло-серый" style="--pc: #E5E7EB;"></button>
+                <button type="button" class="pop-swatch" data-color="#1C1C1E" title="Графитовый" style="--pc: #1C1C1E;"></button>
+            </div>
+        </div>
 
     </div>
 

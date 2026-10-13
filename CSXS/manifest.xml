@@ -2,12 +2,12 @@
 <ExtensionManifest
     Version="11.0"
     ExtensionBundleId="com.antigravity.subsplit"
-    ExtensionBundleVersion="1.0.0"
+    ExtensionBundleVersion="1.0.3"
     ExtensionBundleName="SubSplit AI Subtitles"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 >
     <ExtensionList>
-        <Extension Id="com.antigravity.subsplit.panel" Version="1.0.0" />
+        <Extension Id="com.antigravity.subsplit.panel" Version="1.0.3" />
     </ExtensionList>
 
     <ExecutionEnvironment>

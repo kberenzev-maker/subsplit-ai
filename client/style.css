@@ -884,19 +884,6 @@ input:checked + .slider::before {
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
 }
 
-.native-color-input {
-    position: absolute;
-    top: -8px;
-    left: -8px;
-    width: 48px;
-    height: 48px;
-    opacity: 0;
-    cursor: pointer;
-    border: none;
-    padding: 0;
-    margin: 0;
-}
-
 .color-chip-swatch {
     width: 100%;
     height: 100%;
@@ -972,34 +959,199 @@ input:checked + .slider::before {
     transform: translateY(0.5px);
 }
 
-.accent-color-swatches {
+/* --------------------------------------------------------------------------
+   In-Panel Color Picker Popover (100% Crash-Free)
+   -------------------------------------------------------------------------- */
+.color-picker-popover {
+    position: fixed;
+    z-index: 99999;
+    width: 228px;
+    background: rgba(22, 22, 26, 0.96);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 0.5px solid rgba(255, 255, 255, 0.16);
+    border-radius: 12px;
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.65), 0 2px 8px rgba(0, 0, 0, 0.4);
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    user-select: none;
+    animation: popoverScaleIn 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes popoverScaleIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95) translateY(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.popover-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 2px;
+}
+
+.popover-header-left {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+}
+
+.popover-preview-swatch {
+    width: 14px;
+    height: 14px;
+    border-radius: 3.5px;
+    border: 0.5px solid rgba(255, 255, 255, 0.3);
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+}
+
+.popover-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+}
+
+.popover-header-right {
     display: flex;
     align-items: center;
     gap: 6px;
-    height: 26px;
-    padding: 0 2px;
 }
 
-.color-swatch {
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    background-color: var(--swatch-color, #FFD60A);
-    border: 1.5px solid rgba(255, 255, 255, 0.25);
+.popover-hex-badge {
+    font-family: "SF Mono", ui-monospace, Menlo, monospace;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.08);
+    padding: 2px 5px;
+    border-radius: 4px;
+    border: 0.5px solid rgba(255, 255, 255, 0.1);
+    letter-spacing: 0.5px;
+}
+
+.btn-popover-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 11px;
+    border-radius: 4px;
     cursor: pointer;
-    transition: transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast);
-    padding: 0;
-    flex-shrink: 0;
+    transition: all var(--transition-fast);
 }
 
-.color-swatch:hover {
+.btn-popover-close:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.popover-canvas-wrapper {
+    position: relative;
+    width: 100%;
+    height: 110px;
+    border-radius: 7px;
+    overflow: hidden;
+    cursor: crosshair;
+    border: 0.5px solid rgba(255, 255, 255, 0.14);
+    box-shadow: inset 0 0 3px rgba(0, 0, 0, 0.5);
+}
+
+.color-sat-val-canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.color-canvas-cursor {
+    position: absolute;
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    border: 2px solid #ffffff;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 2px 4px rgba(0, 0, 0, 0.5);
+    pointer-events: none;
+    transform: translate(-50%, -50%);
+    top: 0;
+    left: 0;
+}
+
+.popover-hue-row {
+    display: flex;
+    align-items: center;
+    width: 100%;
+}
+
+.hue-range-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 10px;
+    border-radius: 5px;
+    outline: none;
+    cursor: pointer;
+    background: linear-gradient(to right, #ff0000 0%, #ffff00 17%, #00ff00 33%, #00ffff 50%, #0000ff 67%, #ff00ff 83%, #ff0000 100%);
+    border: 0.5px solid rgba(255, 255, 255, 0.18);
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+.hue-range-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #ffffff;
+    border: 1.5px solid rgba(0, 0, 0, 0.35);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+    cursor: pointer;
+    transition: transform 0.1s ease;
+}
+
+.hue-range-slider::-webkit-slider-thumb:hover {
     transform: scale(1.15);
 }
 
-.color-swatch.active {
+.popover-swatches-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 5px;
+    padding-top: 6px;
+    border-top: 0.5px solid rgba(255, 255, 255, 0.08);
+}
+
+.pop-swatch {
+    width: 100%;
+    height: 18px;
+    border-radius: 4px;
+    background-color: var(--pc);
+    border: 0.5px solid rgba(255, 255, 255, 0.2);
+    cursor: pointer;
+    transition: transform 0.12s ease, border-color 0.12s ease;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.pop-swatch:hover {
+    transform: scale(1.15);
     border-color: #ffffff;
-    box-shadow: 0 0 0 2px rgba(10, 132, 255, 0.85), 0 2px 6px rgba(0, 0, 0, 0.45);
-    transform: scale(1.15);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+    z-index: 1;
+}
+
+.pop-swatch:active {
+    transform: scale(0.95);
 }
 
 .accent-options-grid {

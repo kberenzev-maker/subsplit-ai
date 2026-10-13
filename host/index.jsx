@@ -434,8 +434,51 @@ function findTextComponentProp(clip) {
         if (!comp) continue;
         var mn = comp.matchName || "";
         var dn = comp.displayName || "";
-        if (mn === "AE.ADBE Text" || mn.indexOf("Text") !== -1 || dn === "Text" || dn === "Текст") {
-            if (comp.properties && comp.properties.numItems > 0) {
+        
+        var isTextComp = (
+            mn === "AE.ADBE Text" ||
+            mn.indexOf("Text") !== -1 ||
+            dn === "Text" ||
+            dn === "Текст" ||
+            dn.indexOf("Text") !== -1 ||
+            dn.indexOf("Текст") !== -1 ||
+            mn.indexOf("Graphic") !== -1 ||
+            dn.indexOf("Graphic") !== -1 ||
+            mn.indexOf("Mogrt") !== -1
+        );
+
+        if (isTextComp && comp.properties && comp.properties.numItems > 0) {
+            // Приоритет 1: Свойство с именем Source Text / Text Document / Исходный текст
+            for (var p = 0; p < comp.properties.numItems; p++) {
+                var prop = comp.properties[p];
+                if (!prop) continue;
+                var pDn = prop.displayName || "";
+                var pMn = prop.matchName || "";
+                if (
+                    pDn === "Source Text" ||
+                    pDn === "Исходный текст" ||
+                    pDn.indexOf("Text") !== -1 ||
+                    pMn.indexOf("Text Document") !== -1 ||
+                    pMn.indexOf("ADBE Text") !== -1
+                ) {
+                    return prop;
+                }
+            }
+
+            // Приоритет 2: Любое свойство, чье значение содержит payload субтитров mTextParam
+            for (var p2 = 0; p2 < comp.properties.numItems; p2++) {
+                var prop2 = comp.properties[p2];
+                if (!prop2) continue;
+                try {
+                    var valStr = String(prop2.getValue() || "");
+                    if (valStr.indexOf('{"mTextParam"') !== -1) {
+                        return prop2;
+                    }
+                } catch (eVal) {}
+            }
+
+            // Приоритет 3: Если компонент точно AE.ADBE Text, берем первое свойство
+            if (mn === "AE.ADBE Text") {
                 return comp.properties[0];
             }
         }
@@ -482,35 +525,116 @@ function decodeSubSplitClipName(rawName) {
     };
 }
 
+function extractTextFromSubSplitClip(cl) {
+    if (!cl) return null;
+
+    // 1. Извлечение напрямую из текстового компонента Premiere (100% надежно при перезапуске проекта)
+    var textProp = findTextComponentProp(cl);
+    if (textProp) {
+        try {
+            var rawVal = textProp.getValue();
+            var rawDoc = (typeof rawVal === "string") ? rawVal : (rawVal ? JSON.stringify(rawVal) : "");
+            var jsonIdx = rawDoc.indexOf('{"mTextParam"');
+            if (jsonIdx !== -1) {
+                var jsonStr = rawDoc.substring(jsonIdx);
+                var parsed = JSON.parse(jsonStr);
+                if (parsed && parsed.mTextParam && parsed.mTextParam.mStyleSheet) {
+                    var rawText = String(parsed.mTextParam.mStyleSheet.mText || "").replace(/[\r\n\t]+/g, " ").replace(/^\s+|\s+$/g, "");
+                    if (rawText.length > 0) {
+                        var words = splitPhraseIntoWords(rawText);
+                        var accIdx = detectAccentedWordIndicesFromDoc(words, jsonStr);
+                        return {
+                            words: words,
+                            text: words.join(" "),
+                            accentIndices: accIdx
+                        };
+                    }
+                }
+            }
+        } catch (eProp) {}
+    }
+
+    // 2. Декодирование из названия клипа, если в нем сохранен маркер SubSplit
+    var rawName = String(cl.name || "");
+    if (rawName.indexOf("\u200B") !== -1 || rawName.indexOf("\u2060") !== -1) {
+        var dec = decodeSubSplitClipName(rawName);
+        if (dec && dec.words && dec.words.length > 0) {
+            var isGeneric = (dec.text === "Graphic" || dec.text.toLowerCase().indexOf("applesubtitle") !== -1);
+            if (!isGeneric) {
+                return {
+                    words: dec.words,
+                    text: dec.text,
+                    accentIndices: dec.accentIndices || []
+                };
+            }
+        }
+    }
+
+    // 3. Fallback: имя клипа является человеческим текстом (не имя файла или шаблона)
+    var cleanName = rawName.replace(/[\u200B\u2060]/g, "").trim();
+    var lower = cleanName.toLowerCase();
+    if (
+        cleanName.length > 0 &&
+        lower !== "graphic" &&
+        lower.indexOf("applesubtitle") === -1 &&
+        lower.indexOf(".mogrt") === -1 &&
+        lower.indexOf(".mp4") === -1 &&
+        lower.indexOf(".mov") === -1 &&
+        lower.indexOf(".wav") === -1 &&
+        lower.indexOf(".mp3") === -1
+    ) {
+        var fbWords = splitPhraseIntoWords(cleanName);
+        if (fbWords.length > 0) {
+            return {
+                words: fbWords,
+                text: fbWords.join(" "),
+                accentIndices: []
+            };
+        }
+    }
+
+    return null;
+}
+
 function isSubSplitAnimClip(clip) {
     if (!clip) return false;
     try {
         var rawName = String(clip.name || "");
-        if (rawName.indexOf("\u200B") === 0) {
+        if (rawName.indexOf("\u200B") !== -1 || rawName.indexOf("\u2060") !== -1) {
             return true;
         }
-        var textProp = findTextComponentProp(clip);
-        if (textProp) {
-            return true;
-        }
+
         var cName = rawName.toLowerCase();
         if (
-            cName.indexOf("_appleanim") !== -1 ||
-            cName.indexOf("apple smooth subtitle") !== -1 ||
             cName.indexOf("applesubtitle") !== -1 ||
-            cName.indexOf("[sub]") !== -1
+            cName.indexOf("apple smooth subtitle") !== -1 ||
+            cName.indexOf("_appleanim") !== -1 ||
+            cName.indexOf("[sub]") !== -1 ||
+            cName.indexOf(".mogrt") !== -1
         ) {
             return true;
         }
+
         if (clip.projectItem && clip.projectItem.name) {
             var pName = String(clip.projectItem.name).toLowerCase();
             if (
-                pName.indexOf("apple smooth subtitle") !== -1 ||
                 pName.indexOf("applesubtitle") !== -1 ||
-                pName.indexOf("_appleanim") !== -1
+                pName.indexOf("apple smooth subtitle") !== -1 ||
+                pName.indexOf("_appleanim") !== -1 ||
+                pName.indexOf(".mogrt") !== -1
             ) {
                 return true;
             }
+        }
+
+        var textProp = findTextComponentProp(clip);
+        if (textProp) {
+            try {
+                var v = String(textProp.getValue() || "");
+                if (v.indexOf('{"mTextParam"') !== -1) {
+                    return true;
+                }
+            } catch (eVal) {}
         }
     } catch (e) {}
     return false;
@@ -663,6 +787,7 @@ function parseHexToColorInt(hexStr, fallbackInt) {
     if (isNaN(num)) return fallbackInt;
     return num;
 }
+
 
 function isIndexInArray(arr, idx) {
     if (!arr || !arr.length) return false;
@@ -1300,11 +1425,15 @@ function placeAnimatedGraphicSubtitles(seq, srtPath, animStyle, isSecondaryTrack
 
 function detectAccentedWordIndicesFromDoc(words, docStr) {
     var accented = [];
-    if (!words || words.length === 0 || !docStr || docStr.indexOf('0000{"mTextParam"') !== 0) {
+    if (!words || words.length === 0 || !docStr) {
+        return accented;
+    }
+    var jsonIdx = docStr.indexOf('{"mTextParam"');
+    if (jsonIdx === -1) {
         return accented;
     }
     try {
-        var doc = JSON.parse(docStr.slice(4));
+        var doc = JSON.parse(docStr.substring(jsonIdx));
         var ss = doc && doc.mTextParam && doc.mTextParam.mStyleSheet;
         if (!ss || !ss.mFontSize || !ss.mFontSize.mParamValues) return accented;
         var runs = ss.mFontSize.mParamValues;
@@ -1361,57 +1490,77 @@ function detectAccentedWordIndicesFromDoc(words, docStr) {
 
 function getTimelineSubSplitCues() {
     try {
-        if (!app.project || !app.project.activeSequence) {
-            return JSON.stringify({ error: "Нет активного таймлайна Premiere Pro" });
+        if (!app.project) {
+            return JSON.stringify({ error: "Нет открытого проекта Premiere Pro" });
         }
         var seq = app.project.activeSequence;
+        if (!seq && app.project.sequences && app.project.sequences.numSequences > 0) {
+            seq = app.project.sequences[0];
+        }
+        if (!seq) {
+            return JSON.stringify({ error: "Нет активного таймлайна Premiere Pro" });
+        }
+
         var bestTrackIdx = -1;
         var bestClips = [];
 
-        for (var t = seq.videoTracks.numTracks - 1; t >= 1; t--) {
+        // 1. Сканируем все видеодорожки (сверху вниз, до V1 = 0 включительно)
+        for (var t = seq.videoTracks.numTracks - 1; t >= 0; t--) {
             var tr = seq.videoTracks[t];
             if (!tr || !tr.clips || tr.clips.numItems === 0) continue;
             var matched = [];
             for (var c = 0; c < tr.clips.numItems; c++) {
                 var cl = tr.clips[c];
-                if (cl && isSubSplitAnimClip(cl)) {
-                    var decoded = decodeSubSplitClipName(cl.name);
-                    var words = decoded.words;
-                    var accIdx = decoded.accentIndices;
-
-                    if (words.length === 0 || decoded.text === "Graphic" || decoded.text === "Apple Smooth Subtitle") {
-                        var textProp = findTextComponentProp(cl);
-                        var rawDoc = textProp ? String(textProp.getValue() || "") : "";
-                        if (rawDoc.indexOf('0000{"mTextParam"') === 0) {
-                            try {
-                                var parsed = JSON.parse(rawDoc.slice(4));
-                                var phrase = String(parsed.mTextParam.mStyleSheet.mText || "").replace(/[\r\n]+/g, " ");
-                                words = splitPhraseIntoWords(phrase);
-                                accIdx = detectAccentedWordIndicesFromDoc(words, rawDoc);
-                            } catch (pe) {}
-                        }
-                    } else if (!decoded.isMarked) {
-                        var textProp2 = findTextComponentProp(cl);
-                        var rawDoc2 = textProp2 ? String(textProp2.getValue() || "") : "";
-                        if (rawDoc2.indexOf('0000{"mTextParam"') === 0) {
-                            accIdx = detectAccentedWordIndicesFromDoc(words, rawDoc2);
-                        }
+                if (!cl) continue;
+                if (isSubSplitAnimClip(cl)) {
+                    var info = extractTextFromSubSplitClip(cl);
+                    if (info && info.words && info.words.length > 0) {
+                        matched.push({
+                            trackIndex: t,
+                            clipIndex: c,
+                            start: Math.round(cl.start.seconds * 100) / 100,
+                            end: Math.round(cl.end.seconds * 100) / 100,
+                            text: info.text,
+                            words: info.words,
+                            accentIndices: info.accentIndices || []
+                        });
                     }
-
-                    matched.push({
-                        trackIndex: t,
-                        clipIndex: c,
-                        start: Math.round(cl.start.seconds * 100) / 100,
-                        end: Math.round(cl.end.seconds * 100) / 100,
-                        text: words.join(" "),
-                        words: words,
-                        accentIndices: accIdx
-                    });
                 }
             }
             if (matched.length > bestClips.length) {
                 bestClips = matched;
                 bestTrackIdx = t;
+            }
+        }
+
+        // 2. Если на видеодорожках не найдено, проверяем дорожки субтитров (Caption Tracks)
+        if (bestClips.length === 0 && seq.captionTracks && seq.captionTracks.numTracks > 0) {
+            for (var ct = 0; ct < seq.captionTracks.numTracks; ct++) {
+                var cTrack = seq.captionTracks[ct];
+                if (!cTrack || !cTrack.clips || cTrack.clips.numItems === 0) continue;
+                var cMatched = [];
+                for (var cc = 0; cc < cTrack.clips.numItems; cc++) {
+                    var capClip = cTrack.clips[cc];
+                    if (!capClip) continue;
+                    var capText = String(capClip.name || "").trim();
+                    if (capText.length > 0) {
+                        var capWords = splitPhraseIntoWords(capText);
+                        cMatched.push({
+                            trackIndex: ct,
+                            clipIndex: cc,
+                            isCaptionTrack: true,
+                            start: Math.round(capClip.start.seconds * 100) / 100,
+                            end: Math.round(capClip.end.seconds * 100) / 100,
+                            text: capWords.join(" "),
+                            words: capWords,
+                            accentIndices: []
+                        });
+                    }
+                }
+                if (cMatched.length > bestClips.length) {
+                    bestClips = cMatched;
+                    bestTrackIdx = ct;
+                }
             }
         }
 
