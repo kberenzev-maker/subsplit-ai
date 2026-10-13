@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SubSplit Studio</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+
+        <!-- Apple HIG Toolbar Header & Segmented Navigation -->
+        <header class="header">
+            <div class="logo-group">
+                <span class="logo-badge">PRO</span>
+                <h1 class="title">SubSplit</h1>
+            </div>
+            <nav class="tabs-nav" role="tablist" aria-label="Разделы">
+                <button type="button" class="tab-btn active" id="tabBtnSubtitles" data-tab="tabSubtitles" role="tab" aria-selected="true">
+                    <svg class="sf-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                        <rect x="1.5" y="2.5" width="13" height="11" rx="2.5" stroke="currentColor" stroke-width="1.4"/>
+                        <path d="M4.5 7.5H7.5M9.5 7.5H11.5M4.5 10.2H8.5M10.2 10.2H11.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                    </svg>
+                    <span>Субтитры</span>
+                </button>
+                <button type="button" class="tab-btn" id="tabBtnOrganizer" data-tab="tabOrganizer" role="tab" aria-selected="false">
+                    <svg class="sf-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                        <path d="M1.75 4.25C1.75 3.42157 2.42157 2.75 3.25 2.75H6.18934C6.58716 2.75 6.9687 2.90804 7.25 3.18934L8.31066 4.25H12.75C13.5784 4.25 14.25 4.92157 14.25 5.75V11.75C14.25 12.5784 13.5784 13.25 12.75 13.25H3.25C2.42157 13.25 1.75 12.5784 1.75 11.75V4.25Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+                    </svg>
+                    <span>Органайзер</span>
+                </button>
+            </nav>
+        </header>
+
+        <!-- ==================================================================
+             TAB 1: СУБТИТРЫ (SubSplit AI)
+             ================================================================== -->
+        <div id="tabSubtitles" class="tab-pane active" role="tabpanel">
+            <!-- Sequence Status Pill Bar -->
+            <section class="card seq-card">
+                <div class="seq-status">
+                    <div class="seq-label-group">
+                        <span class="seq-indicator" id="seqIndicator" aria-hidden="true"></span>
+                        <span class="seq-label">Таймлайн</span>
+                    </div>
+                    <span id="seqName" class="seq-name" title="Активный таймлайн Premiere Pro">Проверка Premiere...</span>
+                    <button id="btnRefreshSeq" class="btn-icon" title="Обновить статус таймлайна" aria-label="Обновить статус таймлайна">
+                        <svg class="sf-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                            <path d="M13.25 8A5.25 5.25 0 1 1 11.7 4.28M13.25 2.5V5.25H10.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </button>
+                </div>
+            </section>
+
+            <!-- Card 1: Основные параметры формата и анимации -->
+            <div class="card settings-card">
+
+                <!-- 1. Слайдер: Слов на экран -->
+                <div class="control-block">
+                    <div class="control-header">
+                        <label for="maxWordsSlider" class="control-label">Слов на экран</label>
+                        <span class="control-badge" id="maxWordsBadge">2 слова · Reels</span>
+                    </div>
+                    <div class="slider-wrapper">
+                        <input type="range" class="apple-slider" id="maxWordsSlider" min="1" max="10" step="1" value="2" aria-label="Количество слов на экран">
+                        <div class="slider-ticks-row" id="wordsTicksRow">
+                            <span class="slider-tick-label" data-val="1">1</span>
+                            <span class="slider-tick-label active" data-val="2">2 (Reels)</span>
+                            <span class="slider-tick-label" data-val="3">3</span>
+                            <span class="slider-tick-label" data-val="4">4</span>
+                            <span class="slider-tick-label" data-val="6">6</span>
+                            <span class="slider-tick-label" data-val="8">8</span>
+                            <span class="slider-tick-label" data-val="10">10</span>
+                        </div>
+                    </div>
+                    <input type="hidden" id="maxWordsSelect" value="2">
+                </div>
+
+                <!-- 2. Слайдер: Строк субтитров (1, 2 или 3) -->
+                <div class="control-block">
+                    <div class="control-header">
+                        <label for="maxLinesSlider" class="control-label">Строк субтитров</label>
+                        <span class="control-badge" id="maxLinesBadge">2 строки · Оптимально</span>
+                    </div>
+                    <div class="slider-wrapper">
+                        <input type="range" class="apple-slider" id="maxLinesSlider" min="1" max="3" step="1" value="2" aria-label="Количество строк субтитров">
+                        <div class="slider-ticks-row slider-ticks-3" id="linesTicksRow">
+                            <span class="slider-tick-label" data-val="1">1 строка</span>
+                            <span class="slider-tick-label active" data-val="2">2 строки</span>
+                            <span class="slider-tick-label" data-val="3">3 строки</span>
+                        </div>
+                    </div>
+                    <input type="hidden" id="maxLinesSelect" value="2">
+                </div>
+
+                <!-- 3. Анимация субтитров (Apple Smooth Motion) -->
+                <div class="control-block" style="border-bottom: none;">
+                    <div class="control-header">
+                        <label class="control-label">Стиль анимации · Apple Motion</label>
+                        <span class="control-status" id="animStatusText">Spring Pop · iOS 18</span>
+                    </div>
+                    <div class="segmented-chips-group chips-anim" id="animChipsGroup" role="group" aria-label="Стиль анимации субтитров">
+                        <button type="button" class="chip-anim active" data-anim="spring_pop" title="Фирменный пружинный поп-ап iOS 18 (CASpringAnimation)">Spring</button>
+                        <button type="button" class="chip-anim" data-anim="blur_reveal" title="Размытие + всплытие как в Apple Music Live Lyrics">Lyrics</button>
+                        <button type="button" class="chip-anim" data-anim="fluid_slide" title="Инерционный выезд снизу (cubic-bezier)">Slide</button>
+                        <button type="button" class="chip-anim" data-anim="dynamic_bounce" title="Энергичный упругий импульс для Reels">Pulse</button>
+                        <button type="button" class="chip-anim" data-anim="none" title="Только классическая дорожка субтитров SRT без анимации">SRT</button>
+                    </div>
+                    <input type="hidden" id="animStyleSelect" value="spring_pop">
+                </div>
+
+            </div>
+
+            <!-- Card 2: Акцентные слова · Captions -->
+            <div class="card settings-card">
+                <div class="control-block control-block-row" style="border-bottom: none; padding-bottom: 2px;">
+                    <div class="toggle-card toggle-card-full">
+                        <div class="toggle-info">
+                            <span class="toggle-title">Крупные акцентные слова · Captions</span>
+                            <span class="toggle-desc">Выделение главных слов цветом, размером и CAPS</span>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="checkAutoAccent" checked>
+                            <span class="slider" aria-hidden="true"></span>
+                        </label>
+                    </div>
+
+                    <div class="accent-settings-block" id="accentSettingsBlock">
+                        <!-- Размер и цвет акцента -->
+                        <div class="accent-controls-row">
+                            <div class="accent-col-scale">
+                                <span class="lang-label">Размер слова</span>
+                                <div class="segmented-chips-group chips-accent-scale" id="accentScaleGroup" role="group" aria-label="Масштаб акцентного слова">
+                                    <button type="button" class="chip-scale" data-scale="1.5">1.5×</button>
+                                    <button type="button" class="chip-scale active" data-scale="1.75">1.75×</button>
+                                    <button type="button" class="chip-scale" data-scale="2.0">2.0×</button>
+                                </div>
+                                <input type="hidden" id="accentScaleSelect" value="1.75">
+                            </div>
+
+                            <div class="accent-col-color">
+                                <span class="lang-label">Цвет акцента</span>
+                                <div class="accent-color-swatches" id="accentColorGroup" role="group" aria-label="Цвет акцентного слова">
+                                    <button type="button" class="color-swatch active" data-color="#FFD60A" title="Жёлтый Captions" style="--swatch-color: #FFD60A;"></button>
+                                    <button type="button" class="color-swatch" data-color="#FFFFFF" title="Чистый белый" style="--swatch-color: #FFFFFF;"></button>
+                                    <button type="button" class="color-swatch" data-color="#30D158" title="Неоновый лайм" style="--swatch-color: #30D158;"></button>
+                                    <button type="button" class="color-swatch" data-color="#5AC8FA" title="Голубой Apple" style="--swatch-color: #5AC8FA;"></button>
+                                    <button type="button" class="color-swatch" data-color="#FF375F" title="Яркий коралл" style="--swatch-color: #FF375F;"></button>
+                                </div>
+                                <input type="hidden" id="accentColorSelect" value="#FFD60A">
+                            </div>
+                        </div>
+
+                        <!-- Опции верстки акцента -->
+                        <div class="accent-options-grid">
+                            <label class="cat-checkbox-item">
+                                <input type="checkbox" id="checkAccentUpper" checked>
+                                <span class="cat-checkbox-box"></span>
+                                <span class="cat-text">ЗАГЛАВНЫМИ (CAPS)</span>
+                            </label>
+                            <label class="cat-checkbox-item" id="stackLineWrapper">
+                                <input type="checkbox" id="checkAccentStackLine" checked>
+                                <span class="cat-checkbox-box"></span>
+                                <span class="cat-text" id="stackLineLabel">На отдельной строке</span>
+                            </label>
+                        </div>
+
+                        <!-- Складной интерактивный выбор слов на таймлайне (Disclosure Group) -->
+                        <details class="accent-disclosure" id="accentEditorDetails">
+                            <summary class="accent-disclosure-summary">
+                                <div class="accent-disclosure-title">
+                                    <svg class="sf-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                                        <path d="M11.5 2.5L13.5 4.5M2.5 13.5L3.5 9.5L12 1L15 4L6.5 12.5L2.5 13.5Z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                                    </svg>
+                                    <span>Редактор слов на таймлайне</span>
+                                </div>
+                                <div class="accent-disclosure-right">
+                                    <span class="accent-cue-badge" id="accentCueBadge">0 фраз</span>
+                                    <svg class="sf-icon disclosure-chevron" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                                        <path d="M4.5 6.5L8 10L11.5 6.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                                    </svg>
+                                </div>
+                            </summary>
+                            <div class="accent-disclosure-body">
+                                <div class="accent-editor-actions">
+                                    <span class="accent-editor-hint">Кликните по слову для акцента:</span>
+                                    <div class="accent-btn-group">
+                                        <button type="button" id="btnLoadTimelineWords" class="btn-mini" title="Считать субтитры с таймлайна">С таймлайна</button>
+                                        <button type="button" id="btnAutoAccentTimeline" class="btn-mini btn-mini-accent" title="Автоматически выделить главные слова">⚡ Авто</button>
+                                        <button type="button" id="btnClearAccentTimeline" class="btn-mini" title="Сбросить акценты со всех слов">Сброс</button>
+                                    </div>
+                                </div>
+                                <div id="accentPhrasesList" class="accent-phrases-list">
+                                    <div class="accent-phrases-empty">
+                                        Нажмите «С таймлайна» или создайте субтитры, чтобы выбирать слова кликом.
+                                    </div>
+                                </div>
+                            </div>
+                        </details>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 3: Дополнительные параметры (Складная секция) -->
+            <details class="card advanced-card" id="advancedSettingsDetails">
+                <summary class="advanced-summary">
+                    <div class="advanced-summary-left">
+                        <svg class="sf-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                            <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.3"/>
+                            <path d="M8 5V8.5M8 11.5H8.01" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                        </svg>
+                        <span>Дополнительно: текст, аудио и перевод</span>
+                    </div>
+                    <div class="advanced-summary-right">
+                        <span class="advanced-summary-hint" id="advancedHintText">A1 · Turbo</span>
+                        <svg class="sf-icon disclosure-chevron" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                            <path d="M4.5 6.5L8 10L11.5 6.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </div>
+                </summary>
+                <div class="advanced-body">
+                    <!-- Регистр букв -->
+                    <div class="control-block">
+                        <div class="control-header">
+                            <label class="control-label">Регистр текста</label>
+                            <span class="control-status" id="textCaseStatusText">Как в речи</span>
+                        </div>
+                        <div class="segmented-chips-group chips-case" id="caseChipsGroup" role="group" aria-label="Регистр текста">
+                            <button type="button" class="chip-opt active" data-case="default" title="Как в речи">Aa Обычный</button>
+                            <button type="button" class="chip-opt" data-case="upper" title="ВСЕ ЗАГЛАВНЫЕ">AA ПРОПИСНЫЕ</button>
+                            <button type="button" class="chip-opt" data-case="lower" title="все строчные">aa строчные</button>
+                        </div>
+                        <input type="hidden" id="textCaseSelect" value="default">
+                    </div>
+
+                    <!-- Скрыть знаки -->
+                    <div class="control-block">
+                        <div class="control-header">
+                            <label class="control-label">Скрыть пунктуацию</label>
+                            <span class="control-status" id="punctStatusText">Все знаки сохранены</span>
+                        </div>
+                        <div class="segmented-chips-group chips-punct" role="group" aria-label="Фильтр знаков">
+                            <button type="button" class="chip chip-all" data-char="all" id="chipAll" title="Убрать всю пунктуацию">Все</button>
+                            <button type="button" class="chip" data-char="." title="Убрать точки">.</button>
+                            <button type="button" class="chip" data-char="," title="Убрать запятые">,</button>
+                            <button type="button" class="chip" data-char="?" title="Убрать знаки вопроса">?</button>
+                            <button type="button" class="chip" data-char="!" title="Убрать восклицательные знаки">!</button>
+                        </div>
+                    </div>
+
+                    <!-- Аудиодорожка -->
+                    <div class="control-block" id="audioTrackRow">
+                        <div class="control-header">
+                            <label for="audioTrackSelect" class="control-label">Аудиодорожка</label>
+                            <span class="control-status" id="trackStatusText">Изоляция: A1</span>
+                        </div>
+                        <select id="audioTrackSelect" class="form-control select-full">
+                            <option value="0" selected>A1 (Голос)</option>
+                            <option value="1">A2</option>
+                            <option value="all">Все дорожки (Микс с музыкой)</option>
+                        </select>
+                    </div>
+
+                    <!-- Движок Whisper -->
+                    <div class="control-block">
+                        <div class="control-header">
+                            <label class="control-label">Движок Whisper</label>
+                            <span class="control-status" id="modelStatusText">Apple GPU · Turbo</span>
+                        </div>
+                        <div class="segmented-chips-group chips-case" id="modelChipsGroup" role="group" aria-label="Модель Whisper">
+                            <button type="button" class="chip-model active" data-model="large-v3-turbo" title="Apple Metal GPU">Turbo · Metal</button>
+                            <button type="button" class="chip-model" data-model="small" title="Легкая модель CPU">Small</button>
+                            <button type="button" class="chip-model" data-model="medium" title="Классическая модель Medium">Medium</button>
+                        </div>
+                        <input type="hidden" id="whisperModel" value="large-v3-turbo">
+                    </div>
+
+                    <!-- Коррекция текста -->
+                    <div class="control-block control-block-row">
+                        <div class="toggle-card toggle-card-full">
+                            <div class="toggle-info">
+                                <span class="toggle-title">Умная коррекция текста</span>
+                                <span class="toggle-desc">Орфография, тире и защита предлогов</span>
+                            </div>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="checkProofread" checked>
+                                <span class="slider" aria-hidden="true"></span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Перевод и билингва -->
+                    <div class="control-block control-block-row" style="border-bottom: none;">
+                        <div class="toggle-card toggle-card-full">
+                            <div class="toggle-info">
+                                <span class="toggle-title">Перевод и билингва</span>
+                                <span class="toggle-desc">Синхронный перевод иностранных реплик</span>
+                            </div>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="checkTranslate">
+                                <span class="slider" aria-hidden="true"></span>
+                            </label>
+                        </div>
+
+                        <div class="translate-settings-block" id="translateSettingsBlock" style="display: none;">
+                            <div class="langs-row">
+                                <div class="lang-group">
+                                    <label for="srcLangSelect" class="lang-label">Исходный язык</label>
+                                    <select id="srcLangSelect" class="form-control select-full">
+                                        <option value="auto" selected>Авто / Смешанный</option>
+                                        <option value="en">Английский (EN)</option>
+                                        <option value="ru">Русский (RU)</option>
+                                        <option value="es">Испанский (ES)</option>
+                                        <option value="de">Немецкий (DE)</option>
+                                        <option value="fr">Французский (FR)</option>
+                                    </select>
+                                </div>
+                                <div class="lang-group">
+                                    <label for="tgtLangSelect" class="lang-label">Язык перевода</label>
+                                    <select id="tgtLangSelect" class="form-control select-full">
+                                        <option value="ru" selected>Русский (RU)</option>
+                                        <option value="en">Английский (EN)</option>
+                                        <option value="es">Испанский (ES)</option>
+                                        <option value="de">Немецкий (DE)</option>
+                                        <option value="fr">Французский (FR)</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <label class="cat-checkbox-item dual-track-checkbox">
+                                <input type="checkbox" id="checkDualTrack" checked>
+                                <span class="cat-checkbox-box"></span>
+                                <span class="cat-text">Две дорожки на таймлайне (Перевод + Оригинал)</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </details>
+
+            <!-- Action Buttons for Subtitles -->
+            <div class="actions-group">
+                <button id="btnGenerate" class="btn-primary" type="button">
+                    <svg class="sf-icon sf-icon-btn" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                        <path d="M8 1.75L9.45 5.45L13.25 6.75L9.45 8.05L8 11.75L6.55 8.05L2.75 6.75L6.55 5.45L8 1.75Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+                        <path d="M12.5 10.5L13.1 12.1L14.7 12.7L13.1 13.3L12.5 14.9L11.9 13.3L10.3 12.7L11.9 12.1L12.5 10.5Z" fill="currentColor"/>
+                    </svg>
+                    <span id="btnGenerateText">Создать субтитры</span>
+                </button>
+                <button id="btnCancel" class="btn-danger" type="button" style="display: none;">
+                    Остановить
+                </button>
+            </div>
+        </div>
+
+        <!-- ==================================================================
+             TAB 2: ОРГАНАЙЗЕР (Project Organizer)
+             ================================================================== -->
+        <div id="tabOrganizer" class="tab-pane" role="tabpanel">
+
+            <!-- Project Root Folder Status -->
+            <section class="card project-card">
+                <div class="project-header">
+                    <div class="seq-label-group">
+                        <span class="seq-indicator" id="projectIndicator" aria-hidden="true"></span>
+                        <span class="seq-label">Папка проекта</span>
+                    </div>
+                    <button id="btnRefreshProject" class="btn-icon" title="Обновить статус проекта" aria-label="Обновить статус проекта">
+                        <svg class="sf-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                            <path d="M13.25 8A5.25 5.25 0 1 1 11.7 4.28M13.25 2.5V5.25H10.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="project-dir-path" id="projectDirPath" title="Директория открытого проекта Premiere">
+                    Определение проекта...
+                </div>
+            </section>
+
+            <!-- Protected Folders (Copy-Only) Card -->
+            <div class="card settings-card">
+                <div class="control-block">
+                    <div class="control-header">
+                        <label class="control-label">Папки библиотек (Только копирование)</label>
+                        <span class="control-status" id="protectedCountBadge">0 папок</span>
+                    </div>
+                    <p class="section-hint">
+                        Файлы из этих папок (SFX, музыка, шаблоны) будут <strong>скопированы</strong> в проект с сохранением оригиналов. Файлы из «Загрузок» и «Рабочего стола» — <strong>переносятся</strong>.
+                    </p>
+
+                    <!-- Dynamic List of Protected Folder Tags -->
+                    <div class="folder-tags-container" id="protectedFoldersList">
+                        <div class="folder-tag-empty" id="folderTagEmpty">
+                            Нет добавленных библиотек. Все внешние файлы будут перенесены в проект.
+                        </div>
+                    </div>
+
+                    <button type="button" id="btnAddProtectedFolder" class="btn-secondary">
+                        <svg class="sf-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                            <path d="M8 3.25V12.75M3.25 8H12.75" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                        </svg>
+                        <span>Добавить папку-библиотеку...</span>
+                    </button>
+                </div>
+
+                <!-- Categories to Organize -->
+                <div class="control-block">
+                    <div class="control-header">
+                        <label class="control-label">Категории для сортировки в бины</label>
+                    </div>
+                    <div class="categories-grid">
+                        <label class="cat-checkbox-item">
+                            <input type="checkbox" id="catFootage" checked>
+                            <span class="cat-checkbox-box"></span>
+                            <span class="cat-text">01_Footage (Видео)</span>
+                        </label>
+                        <label class="cat-checkbox-item">
+                            <input type="checkbox" id="catAudio" checked>
+                            <span class="cat-checkbox-box"></span>
+                            <span class="cat-text">02_Audio (Звуки)</span>
+                        </label>
+                        <label class="cat-checkbox-item">
+                            <input type="checkbox" id="catGraphics" checked>
+                            <span class="cat-checkbox-box"></span>
+                            <span class="cat-text">03_Graphics (Картинки)</span>
+                        </label>
+                        <label class="cat-checkbox-item">
+                            <input type="checkbox" id="catSubtitles" checked>
+                            <span class="cat-checkbox-box"></span>
+                            <span class="cat-text">04_Subtitles (SRT)</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Button for Organizer -->
+            <div class="actions-group">
+                <button id="btnOrganizeProject" class="btn-primary" type="button">
+                    <svg class="sf-icon sf-icon-btn" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                        <path d="M2.25 4.25H13.75M4.25 8H11.75M6.25 11.75H9.75" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                    </svg>
+                    <span id="btnOrganizeText">Навести порядок в проекте</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- ==================================================================
+             SHARED: Progress Bar & Console Logs
+             ================================================================== -->
+        <div id="progressContainer" class="progress-container" aria-live="polite">
+            <div class="progress-bar-bg">
+                <div id="progressBar" class="progress-bar-fill"></div>
+            </div>
+        </div>
+
+        <!-- Status & Console Logs -->
+        <section class="log-section">
+            <div class="log-header">
+                <div class="status-wrapper">
+                    <span id="statusBadge" class="status-badge status-ready">Готов к работе</span>
+                </div>
+                <div class="log-actions">
+                    <button id="btnOpenLogFile" class="btn-text" type="button" title="Открыть постоянный журнал работы (subsplit.log)">Журнал</button>
+                    <button id="btnClearLog" class="btn-text" type="button" title="Очистить консоль сообщений">Очистить</button>
+                </div>
+            </div>
+            <div id="logBox" class="log-box" role="log" aria-live="polite">SubSplit Studio готова к работе.
+Выберите «Создать субтитры» или перейдите в «Органайзер».</div>
+        </section>
+
+    </div>
+
+    <script src="CSInterface.js"></script>
+    <script src="logger.js"></script>
+    <script src="organizer.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

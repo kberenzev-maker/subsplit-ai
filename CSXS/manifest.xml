@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<ExtensionManifest
+    Version="11.0"
+    ExtensionBundleId="com.antigravity.subsplit"
+    ExtensionBundleVersion="1.0.0"
+    ExtensionBundleName="SubSplit AI Subtitles"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+>
+    <ExtensionList>
+        <Extension Id="com.antigravity.subsplit.panel" Version="1.0.0" />
+    </ExtensionList>
+
+    <ExecutionEnvironment>
+        <HostList>
+            <Host Name="PPRO" Version="[14.0,99.9]" />
+        </HostList>
+        <LocaleList>
+            <Locale Code="All" />
+        </LocaleList>
+        <RequiredRuntimeList>
+            <RequiredRuntime Name="CSXS" Version="11.0" />
+        </RequiredRuntimeList>
+    </ExecutionEnvironment>
+
+    <DispatchInfoList>
+        <Extension Id="com.antigravity.subsplit.panel">
+            <DispatchInfo>
+                <Resources>
+                    <MainPath>./client/index.html</MainPath>
+                    <ScriptPath>./host/index.jsx</ScriptPath>
+                    <CEFCommandLine>
+                        <Parameter>--v=0</Parameter>
+                        <Parameter>--enable-nodejs</Parameter>
+                        <Parameter>--mixed-context</Parameter>
+                    </CEFCommandLine>
+                </Resources>
+                <Lifecycle>
+                    <AutoVisible>true</AutoVisible>
+                </Lifecycle>
+                <UI>
+                    <Type>Panel</Type>
+                    <Menu>SubSplit AI Subtitles</Menu>
+                    <Geometry>
+                        <Size>
+                            <Width>340</Width>
+                            <Height>580</Height>
+                        </Size>
+                        <MinSize>
+                            <Width>280</Width>
+                            <Height>400</Height>
+                        </MinSize>
+                    </Geometry>
+                </UI>
+            </DispatchInfo>
+        </Extension>
+    </DispatchInfoList>
+</ExtensionManifest>
