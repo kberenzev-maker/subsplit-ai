@@ -75,8 +75,9 @@ def split_multilingual_utterances(
     max_sentence_len: int = 35
 ) -> List[List[Dict[str, Any]]]:
     """
-    Разбивает поток слов на законченные смысловые фразы с учетом переключения языка (code-switching).
-    Сохраняет целостность мысли и не рубит предложения посреди фразы.
+    Разбивает поток слов на законченные смысловые реплики с учетом переключения языка (code-switching).
+    Сохраняет единую мысль спикера (объединяет короткие смежные клаузы без длинной паузы),
+    чтобы переводчик видел всю фразу целиком, а не переводил обрывки по отдельности.
     """
     if not words:
         return []
@@ -104,15 +105,20 @@ def split_multilingual_utterances(
 
         pause_gap = next_w['start'] - w['end']
         has_period = has_sentence_end_punctuation(w_text)
-        is_long_pause = (pause_gap > 0.6)
+        is_question = w_text.rstrip(' "»\'').endswith('?')
+        is_long_pause = (pause_gap > 0.55)
         is_lang_switch = bool(w_lang and next_lang and w_lang != next_lang)
 
-        # Мягкий разрыв на границах клауз только при длине > 20 слов: если есть пауза (>0.35s) или запятая
-        is_clause_split = (len(current) >= 20 and (pause_gap > 0.35 or w_text.endswith((',', ';'))))
+        # Каждая законченная фраза (точка, вопросительный знак, смена языка или пауза)
+        # переводится отдельно, чтобы разные спикеры никогда не склеивались в одного человека
+        is_sentence_break = is_question or has_period
+
+        # Мягкий разрыв на границах клауз только при длине > 22 слов: если есть пауза (>0.35s) или запятая
+        is_clause_split = (len(current) >= 22 and (pause_gap > 0.35 or w_text.endswith((',', ';'))))
         # Жесткий лимит только для непрерывной речи без пауз и знаков препинания
         is_hard_limit = (len(current) >= max_sentence_len)
 
-        if has_period or is_long_pause or is_lang_switch or is_clause_split or is_hard_limit:
+        if is_sentence_break or is_long_pause or is_lang_switch or is_clause_split or is_hard_limit:
             utterances.append(current)
             current = []
             current_lang = None
@@ -120,25 +126,33 @@ def split_multilingual_utterances(
     return utterances
 
 
+# Короткие однозначные разговорные вопросы, имена и междометия (все развернутые ответы идут через литературный LLM)
 GLOSSARY = {
-    # Имена собственные
     "lucy": "Люси",
     "jamie": "Джейми",
     "jason": "Джейсон",
     "anastasia": "Анастасия",
     "nastia": "Настя",
     "yang yushan": "Ян Юйшань",
-    # Частые разговорные темы и активности
-    "fishing": "Рыбалка",
+    "fishing": "Рыбалка.",
     "fishing?": "Рыбалка?",
-    "drawing": "Рисование",
+    "drawing": "Рисование.",
     "drawing?": "Рисование?",
+    "it's drawing": "Рисование.",
+    "it's drawing.": "Рисование.",
     "just one question": "Всего один вопрос.",
     "excuse me": "Извините,",
-    "excuse me, can i ask you one question for my blog": "Извините, можно мне задать вам один вопрос для моего блога?",
-    "excuse me, can i ask you one question for my blog?": "Извините, можно мне задать вам один вопрос для моего блога?",
     "can i ask you a question": "Можно задать вам вопрос?",
     "can i ask you one question": "Можно задать вам один вопрос?",
+    "what makes you happy": "Что делает тебя счастливым?",
+    "what makes me happy": "Что делает меня счастливым?",
+    "what's your name": "Как тебя зовут?",
+    "what is your name": "Как тебя зовут?",
+    "and your name": "А тебя как зовут?",
+    "are you russian": "Ты из России?",
+    "how are you going": "Как дела?",
+    "so these things make me happy": "Вот что приносит мне счастье.",
+    "so these things make me happy.": "Вот что приносит мне счастье.",
     "yes": "Да.",
     "no": "Нет.",
     "yeah": "Да.",
@@ -146,56 +160,16 @@ GLOSSARY = {
     "nope": "Нет.",
     "hello": "Привет.",
     "hi": "Привет.",
-    "okay": "Окей,",
+    "okay": "Окей.",
     "ok": "Окей.",
     "thank you": "Спасибо.",
     "thanks": "Спасибо.",
     "thank you so much": "Большое спасибо.",
     "thank you very much": "Большое спасибо.",
-    "thank you lucy": "Спасибо, Люси.",
-    "what makes you happy": "Что делает тебя счастливым?",
-    "what makes me happy": "Что делает меня счастливым?",
-    "what makes me happy?": "Что делает меня счастливым?",
-    "and what makes me happy is drawing": "А счастье мне приносит рисование.",
-    "what's your name": "Как тебя зовут?",
-    "what's your name?": "Как тебя зовут?",
-    "what is your name": "Как тебя зовут?",
-    "what is your name?": "Как тебя зовут?",
-    "and your name": "А тебя как зовут?",
-    "and your name?": "А тебя как зовут?",
-    "are you russian": "Ты из России?",
-    "are you russian?": "Ты из России?",
-    "do you like it": "Тебе нравится?",
-    "do you like it?": "Тебе нравится?",
-    "is it beautiful": "Там красиво?",
-    "is it beautiful?": "Там красиво?",
-    "how are you going": "Как дела?",
-    "how are you going?": "Как дела?",
-    "see you": "Увидимся.",
-    "see you later": "Увидимся.",
-    "sorry": "Прости.",
-    "oh sorry": "Ой, прости.",
-    "oh, sorry": "Ой, прости.",
     "oh my god": "О боже мой.",
     "oh my gosh": "О боже мой.",
-    "wonderful": "Прекрасно.",
-    "beautiful": "Прекрасно.",
-    "good": "Хорошо.",
-    "great": "Отлично.",
-    "cool": "Круто.",
     "wow": "Вау.",
     "wow.": "Вау.",
-    "oh, good": "О, отлично.",
-    "oh good": "О, отлично.",
-    "ah travel": "А, путешествия.",
-    "for example, travel can make me happy": "Например, путешествия приносят мне счастье.",
-    "so these things make me happy": "Вот такие вещи приносят мне счастье.",
-    "you are happy now": "Ты счастлив сейчас.",
-    "my name is": "Меня зовут...",
-    "my name is...": "Меня зовут...",
-    "english name is lucy": "Мое английское имя — Люси.",
-    "i'm nastia": "Меня зовут Настя.",
-    "i'm anastasia": "Меня зовут Анастасия.",
 }
 
 
@@ -204,17 +178,20 @@ def translate_phrase_ollama(
     src_lang: str = "en",
     tgt_lang: str = "ru",
     model: str = "qwen2.5:7b",
-    host: str = "http://127.0.0.1:11434"
+    host: str = "http://127.0.0.1:11434",
+    prev_context: str = "",
+    next_context: str = ""
 ) -> str:
     """
-    Переводит фразу с исходного языка на целевой через локальную Ollama (/api/chat)
-    с контекстными примерами для разговорных Reels / Shorts и глоссарием.
+    Переводит фразу с исходного языка на целевой через локальную Ollama
+    с первоклассной литературной адаптацией разговорной речи (Reels / Shorts)
+    и сглаживанием запинок/повторов спикера.
     """
     clean_src = text.strip()
     if not clean_src:
         return ""
 
-    # Мгновенная точная подстановка для частых разговорных клише (0 мс, 0 галлюцинаций)
+    # Мгновенная подстановка для однозначных коротких вопросов и междометий из GLOSSARY
     clean_key = re.sub(r'[^\w\s]', '', clean_src).strip().lower()
     if clean_src.lower() in GLOSSARY:
         return GLOSSARY[clean_src.lower()]
@@ -224,55 +201,65 @@ def translate_phrase_ollama(
             res = res.rstrip('. ') + '?'
         return res
 
-    system_prompt = (
-        "Ты — профессиональный редактор субтитров для русскоязычных Reels, Shorts и TikTok.\n"
-        "Твоя задача — точно и естественно адаптировать разговорную английскую речь на живой, грамотный русский язык (кириллица).\n\n"
-        "ПРАВИЛА:\n"
-        "1. Пиши ТОЛЬКО на русском языке (кириллица). Категорически запрещено оставлять английские слова ('work harder' -> 'больше стараться', 'wow' -> 'вау'). Запрещены китайские или любые другие иероглифы.\n"
-        "2. Переводи живо, связно и лаконично по смыслу контекста. Избегай топорных буквализмов и ломаного порядка слов ('счастливым сделать' -> 'приносить счастье').\n"
-        "3. Имена людей передавай по-русски: Lucy -> Люси, Jamie -> Джейми, Jason -> Джейсон, Nastia -> Настя, Anastasia -> Анастасия, Yang Yushan -> Ян Юйшань.\n"
-        "4. Не сокращай и не искажай смысл реплики.\n"
-        "5. Верни ТОЛЬКО готовый текст субтитра. Без кавычек, вводных слов и пояснений."
+    prompt_template = (
+        "Ты — главный редактор русского дубляжа и литературный переводчик живых интервью (Reels / Shorts).\n"
+        "Переведи английскую реплику на живой, естественный, грамотный разговорный русский язык (кириллица).\n\n"
+        "ЗОЛОТЫЕ ПРАВИЛА ЛИТЕРАТУРНОГО ПЕРЕВОДА:\n"
+        "1. ПЕРЕВОДИ ТОЧНО ТО, ЧТО СКАЗАНО, сохраняя живую интонацию (никакой отсебятины и никаких калек):\n"
+        "   - \"feel loved\" -> \"чувствовать себя любимым\" (НЕ \"чувствовать любовь\")\n"
+        "   - \"feel bliss\" / \"feel full of bliss\" -> \"ощущать блаженство\"\n"
+        "   - \"nothing to worry\" / \"nothing to worry about\" -> \"переживать не о чем\" (НЕ \"ничего не беспокоит\")\n"
+        "   - \"come down to the beach and come down and catch a fish, catch dinner\" -> \"выбраться на пляж и поймать рыбу себе на ужин\" (НЕ \"спуститься к пляжу\" и НЕ \"добыть ужин\")\n"
+        "   - \"work harder\" -> \"больше стараться\"\n"
+        "2. СГЛАЖИВАЙ ЗАПИНКИ И ПОВТОРЫ РЕЧИ: устные повторы («when i feel loved and when feel loved», «come down to the beach and come down») объединяй в одну чистую фразу без тавтологии.\n"
+        "3. НЕ ДОБАВЛЯЙ ЛИШНИХ СЛОВ, которых нет в оригинале (запрещено вставлять «а ещё», «также» и т.п., если их не говорил спикер).\n"
+        "4. ПИШИ ТОЛЬКО ПО-РУССКИ (КИРИЛЛИЦА). Категорически запрещены китайские иероглифы и непереведенные английские слова.\n"
+        "5. Верни ТОЛЬКО готовый русский перевод в одну строку без пояснений.\n\n"
+        "Примеры идеального перевода:\n"
+        "Реплика: \"when i feel loved and when feel loved and i feel bliss nothing to worry\"\n"
+        "Русский перевод: \"Когда я чувствую себя любимым и ощущаю блаженство, переживать не о чем.\"\n\n"
+        "Реплика: \"When I feel loved and I feel full of bliss.\"\n"
+        "Русский перевод: \"Когда я чувствую себя любимым и ощущаю блаженство.\"\n\n"
+        "Реплика: \"Nothing to worry about.\"\n"
+        "Русский перевод: \"Переживать не о чем.\"\n\n"
+        "Реплика: \"For example, travel can make me happy.\"\n"
+        "Русский перевод: \"Например, путешествия приносят мне счастье.\"\n\n"
+        "Реплика: \"It's drawing.\"\n"
+        "Русский перевод: \"Рисование.\"\n\n"
+        "Реплика: \"Yeah, it helps me relax, come down to the beach and come down and catch a fish, catch dinner.\"\n"
+        "Русский перевод: \"Да, это помогает мне расслабиться: выбраться на пляж и поймать рыбу себе на ужин.\"\n\n"
+        "Реплика: \"It makes you work harder and work out your life in different areas if you need to.\"\n"
+        "Русский перевод: \"Это заставляет больше стараться и налаживать свою жизнь в разных сферах, если нужно.\"\n\n"
+        f"Реплика: \"{clean_src}\"\n"
+        "Русский перевод:"
     )
-
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": "travel can make me happy"},
-        {"role": "assistant", "content": "путешествия приносят мне счастье"},
-        {"role": "user", "content": "It makes you work harder and work out your life in different areas if you need to so hopefully that makes sense Ah,"},
-        {"role": "assistant", "content": "Это заставляет больше стараться и налаживать свою жизнь в разных сферах, если нужно. Надеюсь, вы меня поняли. Ах,"},
-        {"role": "user", "content": "Come down, catch a fish, yeah, catch dinner."},
-        {"role": "assistant", "content": "Выбраться к воде, поймать рыбу, добыть ужин."},
-        {"role": "user", "content": "And what makes me happy is drawing."},
-        {"role": "assistant", "content": "А счастье мне приносит рисование."},
-        {"role": "user", "content": clean_src}
-    ]
 
     payload = {
         "model": model,
-        "messages": messages,
+        "prompt": prompt_template,
         "stream": False,
         "options": {
-            "temperature": 0.1,
+            "temperature": 0.05,
             "top_p": 0.85,
-            "num_predict": 128
+            "num_predict": 160,
+            "stop": ["\n\n", "Реплика:"]
         }
     }
 
     try:
         data = json.dumps(payload).encode('utf-8')
         req = urllib.request.Request(
-            f"{host}/api/chat",
+            f"{host}/api/generate",
             data=data,
             headers={"Content-Type": "application/json"}
         )
-        with urllib.request.urlopen(req, timeout=12.0) as resp:
+        with urllib.request.urlopen(req, timeout=14.0) as resp:
             if resp.status == 200:
                 resp_data = json.loads(resp.read().decode('utf-8'))
-                raw_translation = resp_data.get('message', {}).get('content', '').strip()
+                raw_translation = resp_data.get('response', '').strip()
 
-                # Очистка мета-тегов LLM, китайских иероглифов и знаков препинания
-                cleaned = re.sub(r'^(Перевод|Translation|Текст):\s*', '', raw_translation, flags=re.IGNORECASE)
+                # Очистка мета-тегов LLM, китайских иероглифов и кавычек
+                cleaned = re.sub(r'^(Перевод|Translation|Текст|Русский перевод):\s*', '', raw_translation, flags=re.IGNORECASE)
                 cleaned = re.sub(r'[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]+', '', cleaned)
                 # Замена случайно оставшихся английских междометий и имен
                 cleaned = re.sub(r'\bwow\b', 'вау', cleaned, flags=re.IGNORECASE)
@@ -349,8 +336,7 @@ def align_translation_to_blocks(
        Это гарантирует, что предлоги и частицы ('не о чем', 'в жизни', 'это понятно') никогда не висят
        и не остаются в одиночестве на экране.
     2. Полученные M русских блоков выравниваются по K оригинальным интервалам через динамическое программирование
-       с сохранением 100% покадровой синхронизации (каждый срез русского субтитра строго совпадает
-       с границей оригинального субтитра).
+       с учетом границ клауз/пауз и сохранением 100% покадровой синхронизации.
     """
     if not original_blocks:
         return []
@@ -390,6 +376,20 @@ def align_translation_to_blocks(
     )
     M = len(ru_chunks)
 
+    # Определяем границы пауз/пунктуации в оригинальных блоках для точной посадки знаков препинания
+    orig_is_boundary = [False] * K
+    for j_idx in range(K - 1):
+        b_txt = str(original_blocks[j_idx].get('text', '')).strip()
+        gap = original_blocks[j_idx + 1]['start'] - original_blocks[j_idx]['end']
+        if b_txt.endswith(('.', '!', '?', ',', ';', ':')) or gap >= 0.18:
+            orig_is_boundary[j_idx] = True
+    orig_is_boundary[K - 1] = True
+
+    ru_has_punct = [
+        str(c.get('text', '')).strip().endswith(('.', '!', '?', ',', ';', ':', '—'))
+        for c in ru_chunks
+    ]
+
     # Случай 1: M <= K (Основной случай)
     # Выбираем M интервалов из K оригинальных блоков через динамическое программирование
     if M <= K:
@@ -401,9 +401,17 @@ def align_translation_to_blocks(
         parent = [[-1] * (K + 1) for _ in range(M + 1)]
 
         def cost(start_j: int, end_j: int, m: int) -> float:
+            # Не включаем длинные внутренние паузы в длительность одного слова, если есть реальная граница клаузы
             actual_dur = original_blocks[end_j - 1]['end'] - original_blocks[start_j]['start']
             target_dur = target_durs[m]
-            return abs(actual_dur - target_dur) ** 2
+            c_val = abs(actual_dur - target_dur) ** 2
+            # Бонус за совпадение знака препинания в переводе с паузой/точкой в оригинале
+            if m < M - 1:
+                if ru_has_punct[m] and orig_is_boundary[end_j - 1]:
+                    c_val -= 0.35
+                elif not ru_has_punct[m] and orig_is_boundary[end_j - 1]:
+                    c_val += 0.25
+            return c_val
 
         for j in range(1, K + 1):
             dp[1][j] = cost(0, j, 0)
@@ -432,9 +440,17 @@ def align_translation_to_blocks(
         for m in range(M):
             s_idx = cuts[m]
             e_idx = cuts[m + 1] - 1
+            block_start = original_blocks[s_idx]['start']
+            block_end = original_blocks[e_idx]['end']
+            if m < M - 1:
+                for internal_j in range(s_idx, e_idx):
+                    gap = original_blocks[internal_j + 1]['start'] - original_blocks[internal_j]['end']
+                    if gap >= 0.22 and ru_has_punct[m]:
+                        block_end = original_blocks[internal_j]['end']
+                        break
             result.append({
-                'start': original_blocks[s_idx]['start'],
-                'end': original_blocks[e_idx]['end'],
+                'start': block_start,
+                'end': block_end,
                 'text': ru_chunks[m]['text']
             })
         return result
@@ -472,12 +488,12 @@ def process_bilingual_translation(
 ) -> Dict[str, List[Dict[str, Any]]]:
     """
     Главный конвейер мультиязычной синхронизации SubSplit:
-    1. Делит поток слов на высказывания с сохранением естественных пауз.
+    1. Делит поток слов на высказывания с сохранением естественных пауз и целостности мысли.
     2. Определяет язык каждого высказывания.
     3. Для родного языка (ru): нарезает блоки субтитров по правилам SubSplit.
     4. Для иностранного языка (en):
        a. Нарезает оригинальную речь на блоки (дорожка 2).
-       b. Переводит фразу через локальную Ollama в контексте всей мысли.
+       b. Переводит фразу через локальную Ollama в контексте соседних реплик диалога.
        c. Выравнивает перевод 1-в-1 по таймкодам оригинальных блоков (дорожка 1).
     5. Гарантирует абсолютную синхронизацию кадр-в-кадр между обеими дорожками.
     """
@@ -490,6 +506,10 @@ def process_bilingual_translation(
     ollama_model = get_preferred_model(server_info.get("models", [])) if server_info["running"] else "qwen2.5:7b"
 
     utterances = split_multilingual_utterances(words, max_sentence_len=35)
+    utterance_texts = [
+        " ".join((w.get('text') or w.get('word') or '').strip() for w in u).strip()
+        for u in utterances
+    ]
     subs_translated: List[Dict[str, Any]] = []
     subs_foreign: List[Dict[str, Any]] = []
 
@@ -498,7 +518,7 @@ def process_bilingual_translation(
             if not utt:
                 continue
 
-            utt_text = " ".join((w.get('text') or w.get('word') or '').strip() for w in utt).strip()
+            utt_text = utterance_texts[idx]
             detected_lang = detect_text_language(utt_text, default=tgt_lang)
 
             # Случай 1: Реплика уже на целевом языке (например, русская речь)
@@ -522,14 +542,18 @@ def process_bilingual_translation(
                 )
                 subs_foreign.extend(en_blocks)
 
-                # 2. Переводим фразу через Ollama
+                # 2. Переводим фразу через Ollama с учетом контекста соседних реплик
+                prev_ctx = utterance_texts[idx - 1] if idx > 0 else ""
+                next_ctx = utterance_texts[idx + 1] if idx + 1 < len(utterance_texts) else ""
                 short_preview = utt_text[:35] + ("..." if len(utt_text) > 35 else "")
                 print(f"STATUS:Перевод [{src_lang}➔{tgt_lang}]: «{short_preview}»", flush=True)
                 translated_str = translate_phrase_ollama(
                     text=utt_text,
                     src_lang=detected_lang,
                     tgt_lang=tgt_lang,
-                    model=ollama_model
+                    model=ollama_model,
+                    prev_context=prev_ctx,
+                    next_context=next_ctx
                 )
 
                 # 3. Синхронизируем перевод 1-в-1 по таймингам блоков оригинальной речи

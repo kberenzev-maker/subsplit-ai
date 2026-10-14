@@ -84,7 +84,7 @@ window.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-let activePunctChars = new Set();
+let activePunctChars = new Set(['all', '.', ',', '?', '!']);
 
 function setupEventListeners() {
     // Переключение вкладок (Субтитры / Органайзер)
@@ -284,9 +284,10 @@ function setupEventListeners() {
         });
     });
 
-    // Инициализация ползунков на старт (2 слова, 2 строки)
-    setWordsValue(2);
-    setLinesValue(2, false);
+    // Инициализация ползунков на старт (1 слово, 1 строка, удаление всех знаков)
+    setWordsValue(1);
+    setLinesValue(1, false);
+    updatePunctStatus();
 
     // Обработка выбора регистра текста (Обычный, CAPS, строчные)
     document.querySelectorAll('.chip-opt').forEach(chip => {
@@ -401,6 +402,77 @@ function setupEventListeners() {
         });
     }
 
+    // Режимы работы с субтитрами: Акценты / Прямое редактирование текста
+    const btnModeAccents = document.getElementById('btnModeAccents');
+    const btnModeText = document.getElementById('btnModeText');
+
+    if (btnModeAccents) {
+        btnModeAccents.addEventListener('click', () => {
+            subtitleEditorMode = 'accents';
+            editingPhraseCueIdx = null;
+            btnModeAccents.classList.add('active');
+            if (btnModeText) btnModeText.classList.remove('active');
+            renderAccentPhrasesList();
+        });
+    }
+
+    if (btnModeText) {
+        btnModeText.addEventListener('click', () => {
+            subtitleEditorMode = 'text';
+            editingPhraseCueIdx = null;
+            btnModeText.classList.add('active');
+            if (btnModeAccents) btnModeAccents.classList.remove('active');
+            renderAccentPhrasesList();
+        });
+    }
+
+    // Быстрый поиск и замена слов на таймлайне
+    const btnToggleFindReplace = document.getElementById('btnToggleFindReplace');
+    const findReplaceBar = document.getElementById('findReplaceBar');
+    const btnCloseFindReplace = document.getElementById('btnCloseFindReplace');
+    const btnExecuteReplace = document.getElementById('btnExecuteReplace');
+    const findInput = document.getElementById('findInput');
+    const replaceInput = document.getElementById('replaceInput');
+
+    if (btnToggleFindReplace && findReplaceBar) {
+        btnToggleFindReplace.addEventListener('click', () => {
+            const isVisible = findReplaceBar.style.display !== 'none';
+            findReplaceBar.style.display = isVisible ? 'none' : 'flex';
+            if (!isVisible && findInput) {
+                findInput.focus();
+                findInput.select();
+            }
+        });
+    }
+
+    if (btnCloseFindReplace && findReplaceBar) {
+        btnCloseFindReplace.addEventListener('click', () => {
+            findReplaceBar.style.display = 'none';
+        });
+    }
+
+    if (btnExecuteReplace) {
+        btnExecuteReplace.addEventListener('click', () => {
+            executeFindAndReplace();
+        });
+    }
+
+    if (findInput) {
+        findInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                if (replaceInput) replaceInput.focus();
+            }
+        });
+    }
+
+    if (replaceInput) {
+        replaceInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                executeFindAndReplace();
+            }
+        });
+    }
+
     const btnLoadTimelineWords = document.getElementById('btnLoadTimelineWords');
     if (btnLoadTimelineWords) {
         btnLoadTimelineWords.addEventListener('click', () => {
@@ -411,7 +483,7 @@ function setupEventListeners() {
     const btnAutoAccentTimeline = document.getElementById('btnAutoAccentTimeline');
     if (btnAutoAccentTimeline) {
         btnAutoAccentTimeline.addEventListener('click', () => {
-            batchUpdateTimelineAccentsFromUI('auto');
+            triggerAutoAccentPipeline();
         });
     }
 
@@ -423,7 +495,10 @@ function setupEventListeners() {
     }
 
     // Подгружаем субтитры с активного таймлайна при старте панели с повторами (пока Premiere Pro загружает проект)
-    setTimeout(() => { loadTimelineCuesForAccentEditor(false); }, 700);
+    setTimeout(() => { 
+        loadTimelineCuesForAccentEditor(false); 
+        updateOllamaAccentButtonState();
+    }, 700);
     setTimeout(() => {
         if (!timelineAccentCues || timelineAccentCues.length === 0) {
             loadTimelineCuesForAccentEditor(false);
@@ -438,6 +513,7 @@ function setupEventListeners() {
     // Автоматическая синхронизация при возврате фокуса в окно панели
     window.addEventListener('focus', () => {
         refreshSequenceInfo();
+        updateOllamaAccentButtonState();
         if (!timelineAccentCues || timelineAccentCues.length === 0) {
             loadTimelineCuesForAccentEditor(false);
         }
@@ -446,6 +522,8 @@ function setupEventListeners() {
 
 let timelineAccentCues = [];
 let activeAccentTrackIndex = -1;
+let subtitleEditorMode = 'accents'; // 'accents' | 'text'
+let editingPhraseCueIdx = null;
 
 function normalizeHexColor(val) {
     if (!val) return null;
@@ -1049,6 +1127,133 @@ function loadTimelineCuesForAccentEditor(verboseLog) {
     });
 }
 
+function remapAccentIndices(oldWords, oldAccentIndices, newWords) {
+    if (!oldWords || !oldAccentIndices || oldAccentIndices.length === 0 || !newWords || newWords.length === 0) {
+        return [];
+    }
+    const cleanWord = w => String(w || '').toLowerCase().replace(/[^a-zа-я0-9]/gi, '');
+    const oldAccentedClean = oldAccentIndices.map(idx => cleanWord(oldWords[idx])).filter(Boolean);
+
+    const remapped = [];
+    newWords.forEach((nw, nIdx) => {
+        const cnw = cleanWord(nw);
+        if (cnw && oldAccentedClean.includes(cnw)) {
+            remapped.push(nIdx);
+        }
+    });
+
+    if (remapped.length === 0 && oldWords.length === newWords.length) {
+        return oldAccentIndices.filter(i => i < newWords.length);
+    }
+    return remapped;
+}
+
+function seekTimelineToSeconds(sec) {
+    if (!csInterface) return;
+    const safeSec = Math.max(0, parseFloat(sec) || 0);
+    const extPath = getCleanExtensionPath();
+    csInterface.evalScript(`$.evalFile(${JSON.stringify(extPath + '/host/index.jsx')}); seekTimelineToSeconds(${safeSec})`, () => {});
+}
+
+function saveCueText(cueIdx, newText) {
+    const cue = timelineAccentCues[cueIdx];
+    if (!cue || !csInterface) return;
+
+    const oldText = cue.text || '';
+    const oldWords = Array.isArray(cue.words) ? cue.words : oldText.split(/\s+/).filter(Boolean);
+    const newWords = String(newText || '').trim().split(/\s+/).filter(Boolean);
+    if (newWords.length === 0) return;
+
+    const remappedAccents = remapAccentIndices(oldWords, cue.accentIndices || [], newWords);
+
+    cue.text = newWords.join(' ');
+    cue.words = newWords;
+    cue.accentIndices = remappedAccents;
+
+    renderAccentPhrasesList();
+
+    const cfg = getAccentConfig();
+    const trackIdx = (typeof cue.trackIndex === 'number' && !isNaN(cue.trackIndex)) ? cue.trackIndex : activeAccentTrackIndex;
+    const isCaptionTrack = !!cue.isCaptionTrack;
+    const extPath = getCleanExtensionPath();
+
+    const scriptCall = `$.evalFile(${JSON.stringify(extPath + '/host/index.jsx')}); updateSingleTimelineClipText(${trackIdx}, ${cue.clipIndex}, ${JSON.stringify(cue.text)}, ${isCaptionTrack ? 'true' : 'false'}, ${JSON.stringify(JSON.stringify(remappedAccents))}, ${JSON.stringify(JSON.stringify(cfg))})`;
+
+    csInterface.evalScript(scriptCall, (resStr) => {
+        try {
+            const res = JSON.parse(resStr);
+            if (res && res.status === 'success') {
+                if (typeof res.trackIndex === 'number') {
+                    cue.trackIndex = res.trackIndex;
+                    activeAccentTrackIndex = res.trackIndex;
+                }
+                setStatus('Текст сохранён ✓', 'ready');
+                log(`✏️ [${formatShortTimecode(cue.start)}] Текст субтитра обновлен: «${cue.text}»`);
+                try {
+                    localStorage.setItem('subsplit_last_cues', JSON.stringify({
+                        trackIndex: activeAccentTrackIndex,
+                        cues: timelineAccentCues,
+                        timestamp: Date.now()
+                    }));
+                } catch (lsE) {}
+            } else if (res && res.error) {
+                log(`⚠️ Ошибка сохранения: ${res.error}`);
+            }
+        } catch (e) {
+            log(`⚠️ Ошибка ответа Premiere: ${e.message}`);
+        }
+    });
+}
+
+function executeFindAndReplace() {
+    const findInput = document.getElementById('findInput');
+    const replaceInput = document.getElementById('replaceInput');
+    if (!findInput || !replaceInput) return;
+
+    const findStr = findInput.value.trim();
+    const replaceStr = replaceInput.value;
+    if (!findStr) {
+        setStatus('Введите слово для поиска', 'error');
+        return;
+    }
+
+    if (!csInterface) return;
+    const cfg = getAccentConfig();
+    const cfgJson = JSON.stringify(cfg);
+    const extPath = getCleanExtensionPath();
+
+    setStatus('Замена...', 'busy');
+    csInterface.evalScript(`$.evalFile(${JSON.stringify(extPath + '/host/index.jsx')}); batchReplaceTimelineSubtitles(${JSON.stringify(findStr)}, ${JSON.stringify(replaceStr)}, false, ${JSON.stringify(cfgJson)})`, (resStr) => {
+        try {
+            const res = JSON.parse(resStr);
+            if (res && res.status === 'success') {
+                if (Array.isArray(res.cues)) {
+                    timelineAccentCues = res.cues;
+                    activeAccentTrackIndex = (typeof res.trackIndex === 'number') ? res.trackIndex : activeAccentTrackIndex;
+                    renderAccentPhrasesList();
+                    try {
+                        localStorage.setItem('subsplit_last_cues', JSON.stringify({
+                            trackIndex: activeAccentTrackIndex,
+                            cues: timelineAccentCues,
+                            timestamp: Date.now()
+                        }));
+                    } catch (lsE) {}
+                } else {
+                    loadTimelineCuesForAccentEditor(false);
+                }
+                const count = res.replacedCount || 0;
+                log(`🔍 Заменено «${findStr}» на «${replaceStr}» в ${count} клипах на таймлайне!`);
+                setStatus(`Заменено в ${count} субтитрах ✨`, 'ready');
+            } else if (res && res.error) {
+                log(`⚠️ ${res.error}`);
+                setStatus('Слово не найдено', 'error');
+            }
+        } catch (e) {
+            log(`⚠️ Ошибка автозамены: ${e.message}`);
+        }
+    });
+}
+
 function renderAccentPhrasesList() {
     const listEl = document.getElementById('accentPhrasesList');
     if (!listEl) return;
@@ -1070,36 +1275,164 @@ function renderAccentPhrasesList() {
         const row = document.createElement('div');
         row.className = 'accent-phrase-row';
 
+        // 1. Интерактивный таймкод: клик переносит плейхед Premiere точно на эту фразу
         const tc = document.createElement('span');
         tc.className = 'accent-phrase-tc';
         tc.textContent = formatShortTimecode(cue.start);
+        tc.title = 'Перейти к этой фразе на таймлайне Premiere Pro';
+        tc.addEventListener('click', (e) => {
+            e.stopPropagation();
+            seekTimelineToSeconds(cue.start);
+        });
         row.appendChild(tc);
 
-        const wordsWrap = document.createElement('div');
-        wordsWrap.className = 'accent-phrase-words';
+        // 2. Режим прямого редактирования текста
+        if (subtitleEditorMode === 'text') {
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'phrase-text-input';
+            input.value = cue.text || (cue.words ? cue.words.join(' ') : '');
+            input.spellcheck = false;
+            input.placeholder = 'Текст субтитра...';
+            input.title = 'Enter или клик вне поля — сохранит в Premiere Pro. Клик по таймкоду переносит плейхед.';
 
-        const words = Array.isArray(cue.words) ? cue.words : String(cue.text || '').split(/\s+/).filter(Boolean);
-        const accentedSet = new Set(Array.isArray(cue.accentIndices) ? cue.accentIndices.map(Number) : []);
-
-        words.forEach((w, wordIdx) => {
-            const pill = document.createElement('button');
-            pill.type = 'button';
-            const isAcc = accentedSet.has(wordIdx);
-            pill.className = 'word-accent-pill' + (isAcc ? ' active' : '');
-            if (isAcc) {
-                pill.style.borderColor = accentColor;
-                pill.style.color = accentColor;
-            }
-            const displayWord = (isAcc && cfg.upperCase) ? String(w).toUpperCase() : String(w);
-            pill.textContent = isAcc ? `✦ ${displayWord}` : displayWord;
-            pill.title = isAcc ? 'Убрать крупный акцент со слова' : 'Сделать слово крупным акцентным (Captions)';
-            pill.addEventListener('click', () => {
-                onWordAccentToggle(cueIdx, wordIdx);
+            let originalVal = input.value;
+            input.addEventListener('focus', () => {
+                originalVal = input.value;
+                seekTimelineToSeconds(cue.start);
             });
-            wordsWrap.appendChild(pill);
-        });
 
-        row.appendChild(wordsWrap);
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    input.blur();
+                }
+            });
+
+            input.addEventListener('blur', () => {
+                const newVal = input.value.trim();
+                if (newVal && newVal !== originalVal) {
+                    saveCueText(cueIdx, newVal);
+                }
+            });
+
+            row.appendChild(input);
+        } else {
+            // 3. Режим слов-акцентов (с возможностью точечного редактирования строки)
+            if (editingPhraseCueIdx === cueIdx) {
+                const editBox = document.createElement('div');
+                editBox.className = 'phrase-inline-edit';
+
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.className = 'phrase-text-input';
+                input.value = cue.text || (cue.words ? cue.words.join(' ') : '');
+                input.spellcheck = false;
+                input.placeholder = 'Текст фразы...';
+
+                const btnSave = document.createElement('button');
+                btnSave.type = 'button';
+                btnSave.className = 'btn-mini btn-mini-accent';
+                btnSave.textContent = '✓';
+                btnSave.title = 'Сохранить (Enter)';
+
+                const btnCancel = document.createElement('button');
+                btnCancel.type = 'button';
+                btnCancel.className = 'btn-mini';
+                btnCancel.textContent = '✕';
+                btnCancel.title = 'Отмена (Esc)';
+
+                const doSave = () => {
+                    const newVal = input.value.trim();
+                    editingPhraseCueIdx = null;
+                    if (newVal && newVal !== (cue.text || '')) {
+                        saveCueText(cueIdx, newVal);
+                    } else {
+                        renderAccentPhrasesList();
+                    }
+                };
+
+                const doCancel = () => {
+                    editingPhraseCueIdx = null;
+                    renderAccentPhrasesList();
+                };
+
+                btnSave.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    doSave();
+                });
+
+                btnCancel.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    doCancel();
+                });
+
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        doSave();
+                    } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        doCancel();
+                    }
+                });
+
+                editBox.appendChild(input);
+                editBox.appendChild(btnSave);
+                editBox.appendChild(btnCancel);
+                row.appendChild(editBox);
+
+                setTimeout(() => {
+                    input.focus();
+                    input.select();
+                }, 20);
+            } else {
+                const wordsWrap = document.createElement('div');
+                wordsWrap.className = 'accent-phrase-words';
+                wordsWrap.title = 'Двойной клик — редактировать текст фразы';
+
+                const words = Array.isArray(cue.words) ? cue.words : String(cue.text || '').split(/\s+/).filter(Boolean);
+                const accentedSet = new Set(Array.isArray(cue.accentIndices) ? cue.accentIndices.map(Number) : []);
+
+                words.forEach((w, wordIdx) => {
+                    const pill = document.createElement('button');
+                    pill.type = 'button';
+                    const isAcc = accentedSet.has(wordIdx);
+                    pill.className = 'word-accent-pill' + (isAcc ? ' active' : '');
+                    if (isAcc) {
+                        pill.style.borderColor = accentColor;
+                        pill.style.color = accentColor;
+                    }
+                    const displayWord = (isAcc && cfg.upperCase) ? String(w).toUpperCase() : String(w);
+                    pill.textContent = isAcc ? `✦ ${displayWord}` : displayWord;
+                    pill.title = isAcc ? 'Убрать крупный акцент со слова' : 'Сделать слово крупным акцентным (Captions)';
+                    pill.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        onWordAccentToggle(cueIdx, wordIdx);
+                    });
+                    wordsWrap.appendChild(pill);
+                });
+
+                wordsWrap.addEventListener('dblclick', () => {
+                    editingPhraseCueIdx = cueIdx;
+                    renderAccentPhrasesList();
+                });
+
+                row.appendChild(wordsWrap);
+
+                const btnEdit = document.createElement('button');
+                btnEdit.type = 'button';
+                btnEdit.className = 'btn-phrase-edit';
+                btnEdit.title = 'Редактировать текст этой фразы (или 2-й клик)';
+                btnEdit.innerHTML = `<svg class="sf-icon" viewBox="0 0 16 16" fill="none"><path d="M11.5 2.5L13.5 4.5M2.5 13.5L3.5 9.5L12 1L15 4L6.5 12.5L2.5 13.5Z" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+                btnEdit.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    editingPhraseCueIdx = cueIdx;
+                    renderAccentPhrasesList();
+                });
+                row.appendChild(btnEdit);
+            }
+        }
+
         listEl.appendChild(row);
     });
 
@@ -1127,9 +1460,10 @@ function onWordAccentToggle(cueIdx, wordIdx) {
     const indicesJson = JSON.stringify(current);
     const cfgJson = JSON.stringify(cfg);
     const trackIdx = (typeof cue.trackIndex === 'number' && !isNaN(cue.trackIndex)) ? cue.trackIndex : activeAccentTrackIndex;
+    const isCaptionTrack = !!cue.isCaptionTrack;
     const extPath = getCleanExtensionPath();
 
-    const scriptCall = `$.evalFile(${JSON.stringify(extPath + '/host/index.jsx')}); updateSingleTimelineClipAccent(${trackIdx}, ${cue.clipIndex}, ${JSON.stringify(phraseClean)}, ${JSON.stringify(indicesJson)}, ${JSON.stringify(cfgJson)})`;
+    const scriptCall = `$.evalFile(${JSON.stringify(extPath + '/host/index.jsx')}); updateSingleTimelineClipText(${trackIdx}, ${cue.clipIndex}, ${JSON.stringify(phraseClean)}, ${isCaptionTrack ? 'true' : 'false'}, ${JSON.stringify(indicesJson)}, ${JSON.stringify(cfgJson)})`;
     csInterface.evalScript(scriptCall, (resStr) => {
         try {
             const res = JSON.parse(resStr);
@@ -1188,6 +1522,261 @@ function batchUpdateTimelineAccentsFromUI(mode) {
             }
         } catch (e) {}
     });
+}
+
+// Проверка доступности локальной Ollama и поиск наилучшей модели
+async function checkOllamaAvailable() {
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 1200);
+        const resp = await fetch('http://127.0.0.1:11434/api/tags', {
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        if (resp.ok) {
+            const data = await resp.json();
+            const names = (data.models || []).map(m => m.name || m.model || '');
+            const preferred = ['qwen2.5:7b', 'qwen2.5:14b', 'qwen2.5:latest', 'qwen2.5:3b', 'qwen2.5:1.5b', 'llama3.1:8b', 'llama3:8b'];
+            for (const p of preferred) {
+                const found = names.find(n => n.includes(p));
+                if (found) return found;
+            }
+            return names[0] || 'qwen2.5:7b';
+        }
+    } catch (e) {}
+    return null;
+}
+
+// Обновление состояния кнопки авто-акцента в зависимости от наличия Ollama
+async function updateOllamaAccentButtonState() {
+    const btn = document.getElementById('btnAutoAccentTimeline');
+    if (!btn) return;
+    const model = await checkOllamaAvailable();
+    if (model) {
+        btn.textContent = '⚡ AI Авто';
+        btn.title = `AI Ollama (${model}) выберет смысловые и эмоциональные акценты`;
+        btn.classList.add('has-ai');
+    } else {
+        btn.textContent = '⚡ Авто';
+        btn.title = 'Быстрый авто-акцент (для глубокого AI запустите Ollama)';
+        btn.classList.remove('has-ai');
+    }
+}
+
+// Запрос к Ollama для подбора смысловых/эмоциональных акцентов для пакета фраз
+async function queryOllamaForAccentsBatch(chunkItems, model) {
+    const formattedPhrases = chunkItems.map(c => ({
+        id: c.localId,
+        text: (Array.isArray(c.cue.words) && c.cue.words.length > 0) ? c.cue.words.join(' ') : String(c.cue.text || '').replace(/\s+/g, ' ').trim()
+    }));
+
+    const prompt = `Ты — креативный видеомонтажер и режиссер вирусных видео (Reels, TikTok, Shorts).
+Твоя задача — расставить яркие смысловые акценты на ключевых словах в субтитрах, чтобы удержать внимание зрителя.
+
+ПРАВИЛА ВЫБОРА АКЦЕНТА:
+1. Выделяй самое сильное, эмоциональное или смысловое слово фразы:
+   - Эмоции и чувства («любимым», «блаженство», «кайф», «шок», «круто»).
+   - Числа, деньги, факты («миллион», «5 минут», «секрет», «впервые»).
+   - Ключевые глаголы действия или яркие существительные («переживать», «взорвал», «заработал»).
+2. НЕ выделяй скучные служебные слова, местоимения, предлоги и связки («когда», «я», «себя», «и», «не», «о», «чем», «это», «что», «ты»).
+3. НИКОГДА не выделяй предлоги и короткие междометия («о», «а», «и», «в», «на», «но», «ну»). В возгласах вроде «О боже» главным словом является «боже», а не «о»!
+4. Если во фразе все слова нейтральные или служебные, акцент можно не ставить (null).
+
+Входной список фраз (JSON):
+${JSON.stringify(formattedPhrases, null, 2)}
+
+Верни строго JSON объект формата:
+{
+  "accents": [
+    {"id": 0, "accent_word": "слово"}
+  ]
+}`;
+
+    const resp = await fetch('http://127.0.0.1:11434/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            model: model,
+            prompt: prompt,
+            format: 'json',
+            stream: false,
+            options: {
+                temperature: 0.1,
+                top_p: 0.85
+            }
+        })
+    });
+
+    if (!resp.ok) {
+        throw new Error(`HTTP ${resp.status}`);
+    }
+
+    const data = await resp.json();
+    let parsed = null;
+    try {
+        parsed = JSON.parse(data.response);
+    } catch (pe) {
+        throw new Error('Некорректный JSON от Ollama');
+    }
+
+    return (parsed && Array.isArray(parsed.accents)) ? parsed.accents : [];
+}
+
+// Умный поиск индекса акцентного слова во фразе
+function findAccentWordIndexInWords(words, targetWord) {
+    if (!words || !words.length || !targetWord) return -1;
+    const clean = s => String(s || '').toLowerCase().replace(/[^a-zA-Zа-яА-ЯёЁ0-9]/g, '');
+    const cleanTarget = clean(targetWord);
+    if (!cleanTarget) return -1;
+
+    // 1. Прямое точное совпадение со словом
+    for (let i = 0; i < words.length; i++) {
+        if (clean(words[i]) === cleanTarget) {
+            return i;
+        }
+    }
+
+    // 2. Если targetWord содержит несколько слов (например, "о боже" или "3 дня")
+    const targetSubWords = String(targetWord).toLowerCase().split(/\s+/).map(clean).filter(w => w.length > 0);
+    targetSubWords.sort((a, b) => b.length - a.length); // Сначала самые длинные и содержательные слова
+    for (const tw of targetSubWords) {
+        if (tw.length < 2 && words.length > 1) continue; // Игнорируем однобуквенные частицы
+        for (let i = 0; i < words.length; i++) {
+            if (clean(words[i]) === tw) {
+                return i;
+            }
+        }
+    }
+
+    // 3. Подстрока (только для слов от 3 букв)
+    for (let i = 0; i < words.length; i++) {
+        const cw = clean(words[i]);
+        if (cw && cw.length >= 3 && (cleanTarget.includes(cw) || cw.includes(cleanTarget))) {
+            return i;
+        }
+    }
+
+    return -1;
+}
+
+// Главная функция AI авто-акцента через Ollama (с откатом на эвристику)
+async function triggerAutoAccentPipeline() {
+    if (!csInterface) return;
+    if (!timelineAccentCues || timelineAccentCues.length === 0) {
+        setStatus('Сначала считайте субтитры с таймлайна', 'error');
+        log('⚠️ На панели нет субтитров для расстановки акцентов. Нажмите «С таймлайна».');
+        return;
+    }
+
+    setStatus('Проверка AI Ollama...', 'busy');
+    const ollamaModel = await checkOllamaAvailable();
+
+    if (!ollamaModel) {
+        log('ℹ️ Ollama не обнаружена на порту 11434 — применяем быстрый эвристический авто-акцент.');
+        batchUpdateTimelineAccentsFromUI('auto');
+        return;
+    }
+
+    setStatus(`🧠 AI Ollama (${ollamaModel})...`, 'busy');
+    log(`🧠 Запуск AI Ollama (${ollamaModel}): анализ эмоций и ключевых слов на таймлайне...`);
+
+    const cfg = getAccentConfig();
+    const batchSize = 15;
+    const totalCues = timelineAccentCues.length;
+    let aiAccentedCount = 0;
+
+    try {
+        const mappedItems = timelineAccentCues.map((cue, idx) => ({ localId: idx, cue: cue }));
+
+        for (let i = 0; i < mappedItems.length; i += batchSize) {
+            const chunk = mappedItems.slice(i, i + batchSize);
+            const chunkPercent = Math.min(100, Math.round(((i + chunk.length) / totalCues) * 100));
+            setStatus(`🧠 AI Ollama: ${chunkPercent}%...`, 'busy');
+
+            try {
+                const accentsRes = await queryOllamaForAccentsBatch(chunk, ollamaModel);
+                const accentMap = new Map();
+                accentsRes.forEach(item => {
+                    if (typeof item.id === 'number') {
+                        accentMap.set(item.id, item.accent_word);
+                    }
+                });
+
+                chunk.forEach(ch => {
+                    const cue = ch.cue;
+                    const words = Array.isArray(cue.words) && cue.words.length > 0 
+                        ? cue.words 
+                        : String(cue.text || '').trim().split(/\s+/).filter(Boolean);
+                    cue.words = words;
+
+                    const aiWord = accentMap.get(ch.localId);
+                    let chosenIdx = -1;
+                    if (aiWord) {
+                        chosenIdx = findAccentWordIndexInWords(words, aiWord);
+                    }
+
+                    if (chosenIdx >= 0) {
+                        cue.accentIndices = [chosenIdx];
+                        aiAccentedCount++;
+                    } else if (words.length >= 2) {
+                        // Если AI вернул null или нейтрально, оставляем фразу без акцента
+                        cue.accentIndices = [];
+                    } else {
+                        cue.accentIndices = [];
+                    }
+                });
+            } catch (chunkErr) {
+                log(`⚠️ Ошибка пакета ${i + 1}-${i + chunk.length}: ${chunkErr.message}`);
+            }
+        }
+
+        // Пакетно обновляем клипы на таймлайне в Premiere Pro через единый вызов ExtendScript
+        const payloadJson = JSON.stringify(timelineAccentCues.map(c => ({
+            clipIndex: c.clipIndex,
+            trackIndex: (typeof c.trackIndex === 'number') ? c.trackIndex : activeAccentTrackIndex,
+            words: c.words,
+            text: c.text,
+            accentIndices: c.accentIndices || []
+        })));
+        const cfgJson = JSON.stringify(cfg);
+        const extPath = getCleanExtensionPath();
+
+        csInterface.evalScript(`$.evalFile(${JSON.stringify(extPath + '/host/index.jsx')}); applyBatchTimelineCuesAccents(${JSON.stringify(payloadJson)}, ${JSON.stringify(cfgJson)})`, (resStr) => {
+            try {
+                const res = JSON.parse(resStr);
+                if (res && res.status === 'success') {
+                    if (Array.isArray(res.cues)) {
+                        activeAccentTrackIndex = (typeof res.trackIndex === 'number') ? res.trackIndex : activeAccentTrackIndex;
+                        timelineAccentCues = res.cues.map(c => ({
+                            ...c,
+                            trackIndex: (typeof c.trackIndex === 'number') ? c.trackIndex : activeAccentTrackIndex
+                        }));
+                    }
+                    renderAccentPhrasesList();
+                    try {
+                        localStorage.setItem('subsplit_last_cues', JSON.stringify({
+                            trackIndex: activeAccentTrackIndex,
+                            cues: timelineAccentCues,
+                            timestamp: Date.now()
+                        }));
+                    } catch (lsE) {}
+
+                    log(`✨ AI Ollama (${ollamaModel}) расставила смысловые акценты на ${aiAccentedCount} из ${totalCues} фраз!`);
+                    setStatus('AI акценты расставлены ✨', 'ready');
+                } else if (res && res.error) {
+                    log(`⚠️ Ошибка применения акцентов в Premiere: ${res.error}`);
+                    setStatus('Ошибка применения', 'error');
+                }
+            } catch (e) {
+                renderAccentPhrasesList();
+                setStatus('Готово!', 'ready');
+            }
+        });
+
+    } catch (err) {
+        log(`⚠️ Ошибка AI Ollama: ${err.message}. Переключаемся на базовый авто-акцент.`);
+        batchUpdateTimelineAccentsFromUI('auto');
+    }
 }
 
 function updateTrackStatusText() {

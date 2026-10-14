@@ -539,14 +539,23 @@ function extractTextFromSubSplitClip(cl) {
                 var jsonStr = rawDoc.substring(jsonIdx);
                 var parsed = JSON.parse(jsonStr);
                 if (parsed && parsed.mTextParam && parsed.mTextParam.mStyleSheet) {
-                    var rawText = String(parsed.mTextParam.mStyleSheet.mText || "").replace(/[\r\n\t]+/g, " ").replace(/^\s+|\s+$/g, "");
+                    var ss = parsed.mTextParam.mStyleSheet;
+                    var rawText = String(ss.mText || "").replace(/[\r\n\t]+/g, " ").replace(/^\s+|\s+$/g, "");
                     if (rawText.length > 0) {
                         var words = splitPhraseIntoWords(rawText);
                         var accIdx = detectAccentedWordIndicesFromDoc(words, jsonStr);
+                        var isSec = false;
+                        try {
+                            var fnRuns = ss.mFontName && ss.mFontName.mParamValues;
+                            if (fnRuns && fnRuns.length > 0 && String(fnRuns[0][1]) === "HelveticaNeue-Medium") {
+                                isSec = true;
+                            }
+                        } catch (ef) {}
                         return {
                             words: words,
                             text: words.join(" "),
-                            accentIndices: accIdx
+                            accentIndices: accIdx,
+                            isSecondary: isSec
                         };
                     }
                 }
@@ -1503,18 +1512,21 @@ function getTimelineSubSplitCues() {
 
         var bestTrackIdx = -1;
         var bestClips = [];
+        var bestIsSecondary = true;
 
         // 1. Сканируем все видеодорожки (сверху вниз, до V1 = 0 включительно)
         for (var t = seq.videoTracks.numTracks - 1; t >= 0; t--) {
             var tr = seq.videoTracks[t];
             if (!tr || !tr.clips || tr.clips.numItems === 0) continue;
             var matched = [];
+            var secCount = 0;
             for (var c = 0; c < tr.clips.numItems; c++) {
                 var cl = tr.clips[c];
                 if (!cl) continue;
                 if (isSubSplitAnimClip(cl)) {
                     var info = extractTextFromSubSplitClip(cl);
                     if (info && info.words && info.words.length > 0) {
+                        if (info.isSecondary) secCount++;
                         matched.push({
                             trackIndex: t,
                             clipIndex: c,
@@ -1527,9 +1539,17 @@ function getTimelineSubSplitCues() {
                     }
                 }
             }
-            if (matched.length > bestClips.length) {
-                bestClips = matched;
-                bestTrackIdx = t;
+            if (matched.length > 0) {
+                var isTrackSec = (secCount > matched.length / 2);
+                if (
+                    bestClips.length === 0 ||
+                    (bestIsSecondary && !isTrackSec) ||
+                    (bestIsSecondary === isTrackSec && matched.length > bestClips.length)
+                ) {
+                    bestClips = matched;
+                    bestTrackIdx = t;
+                    bestIsSecondary = isTrackSec;
+                }
             }
         }
 
@@ -1583,13 +1603,55 @@ function getTimelineSubSplitCues() {
     }
 }
 
-function updateSingleTimelineClipAccent(trackIdx, clipIdx, phraseText, accentIndicesJson, accentCfgJson) {
+function seekTimelineToSeconds(sec) {
+    try {
+        if (!app.project || !app.project.activeSequence) {
+            return JSON.stringify({ error: "Нет активного таймлайна" });
+        }
+        var seq = app.project.activeSequence;
+        var t = new Time();
+        t.seconds = Math.max(0, Number(sec) || 0);
+        seq.setPlayerPosition(t.ticks);
+        return JSON.stringify({ status: "success", time: t.seconds });
+    } catch (e) {
+        return JSON.stringify({ error: e.toString() });
+    }
+}
+
+function updateSingleTimelineClipText(trackIdx, clipIdx, newText, isCaptionTrack, accentIndicesJson, accentCfgJson) {
     try {
         if (!app.project || !app.project.activeSequence) {
             return JSON.stringify({ error: "Нет активного таймлайна" });
         }
         var seq = app.project.activeSequence;
         var resolvedTrackIdx = Number(trackIdx);
+
+        // 1. Поддержка дорожек субтитров (Caption Tracks)
+        if (isCaptionTrack && seq.captionTracks && resolvedTrackIdx < seq.captionTracks.numTracks) {
+            var cTrack = seq.captionTracks[resolvedTrackIdx];
+            if (cTrack && cTrack.clips && Number(clipIdx) < cTrack.clips.numItems) {
+                var capClip = cTrack.clips[Number(clipIdx)];
+                var cleanCap = String(newText || "").replace(/[\r\n\t]+/g, " ").replace(/^\s+|\s+$/g, "");
+                capClip.name = cleanCap;
+                try {
+                    var previewCapT = new Time();
+                    previewCapT.seconds = capClip.start.seconds + 0.1;
+                    seq.setPlayerPosition(previewCapT.ticks);
+                } catch (eCapT) {}
+                var capWords = splitPhraseIntoWords(cleanCap);
+                return JSON.stringify({
+                    status: "success",
+                    trackIndex: resolvedTrackIdx,
+                    clipIndex: Number(clipIdx),
+                    isCaptionTrack: true,
+                    text: cleanCap,
+                    words: capWords,
+                    accentIndices: []
+                });
+            }
+        }
+
+        // 2. Поддержка графических MOGRT-клипов на видеодорожках
         if (isNaN(resolvedTrackIdx) || resolvedTrackIdx < 0 || !seq.videoTracks[resolvedTrackIdx]) {
             var fallbackInfo = JSON.parse(getTimelineSubSplitCues());
             if (fallbackInfo && typeof fallbackInfo.trackIndex === "number") {
@@ -1618,20 +1680,29 @@ function updateSingleTimelineClipAccent(trackIdx, clipIdx, phraseText, accentInd
             accentCfg = JSON.parse(accentCfgJson || "{}");
         } catch (e2) {}
 
-        var cleanPhrase = String(phraseText || "").replace(/[\u200B\u2060\r\n]+/g, " ").replace(/^\s+|\s+$/g, "");
+        var cleanPhrase = String(newText || "").replace(/[\u200B\u2060\r\n]+/g, " ").replace(/^\s+|\s+$/g, "");
         if (!cleanPhrase) {
             cleanPhrase = decodeSubSplitClipName(cl.name).text;
         }
         var words = splitPhraseIntoWords(cleanPhrase);
 
+        // Ограничиваем индексы акцентов диапазоном новых слов
+        var validAccents = [];
+        for (var a = 0; a < accentIndices.length; a++) {
+            var ai = Number(accentIndices[a]);
+            if (!isNaN(ai) && ai >= 0 && ai < words.length) {
+                validAccents.push(ai);
+            }
+        }
+
         try {
-            cl.name = encodeSubSplitClipName(words, accentIndices);
+            cl.name = encodeSubSplitClipName(words, validAccents);
         } catch (nErr) {}
 
         var seqW = Number(seq.frameSizeHorizontal) || 1080;
         var seqH = Number(seq.frameSizeVertical) || 1920;
 
-        var payload = buildAppleTextDocPayload(words.join(" "), false, seqW, seqH, accentIndices, accentCfg);
+        var payload = buildAppleTextDocPayload(words.join(" "), false, seqW, seqH, validAccents, accentCfg);
         textProp.setValue(payload, true);
 
         // Перемещаем плейхед на середину входа этого субтитра, чтобы пользователь сразу видел результат
@@ -1646,10 +1717,74 @@ function updateSingleTimelineClipAccent(trackIdx, clipIdx, phraseText, accentInd
             status: "success",
             trackIndex: resolvedTrackIdx,
             clipIndex: Number(clipIdx),
-            accentIndices: accentIndices
+            text: words.join(" "),
+            words: words,
+            accentIndices: validAccents
         });
     } catch (err) {
         return JSON.stringify({ error: err.toString() });
+    }
+}
+
+function updateSingleTimelineClipAccent(trackIdx, clipIdx, phraseText, accentIndicesJson, accentCfgJson) {
+    return updateSingleTimelineClipText(trackIdx, clipIdx, phraseText, false, accentIndicesJson, accentCfgJson);
+}
+
+function batchReplaceTimelineSubtitles(findStr, replaceStr, matchCase, accentCfgJson) {
+    try {
+        if (!app.project || !app.project.activeSequence) {
+            return JSON.stringify({ error: "Нет активного таймлайна" });
+        }
+        var infoRes = JSON.parse(getTimelineSubSplitCues());
+        if (infoRes.status !== "success" || !infoRes.cues || infoRes.cues.length === 0) {
+            return JSON.stringify({ error: "На таймлайне нет субтитров для замены" });
+        }
+        if (!findStr || String(findStr).length === 0) {
+            return JSON.stringify({ error: "Пустая строка для поиска" });
+        }
+
+        var accentCfg = {};
+        try { accentCfg = JSON.parse(accentCfgJson || "{}"); } catch (eCfg) {}
+
+        var seq = app.project.activeSequence;
+        var seqW = Number(seq.frameSizeHorizontal) || 1080;
+        var seqH = Number(seq.frameSizeVertical) || 1920;
+        var tr = seq.videoTracks[infoRes.trackIndex];
+        var replacedCount = 0;
+
+        var flags = matchCase ? "g" : "gi";
+        var escaped = String(findStr).replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, "\\$&");
+        var re = new RegExp(escaped, flags);
+
+        for (var i = 0; i < infoRes.cues.length; i++) {
+            var cue = infoRes.cues[i];
+            var oldText = cue.text || "";
+            if (!re.test(oldText)) continue;
+
+            var newText = oldText.replace(re, replaceStr || "");
+            var words = splitPhraseIntoWords(newText);
+            var validAccents = [];
+            for (var a = 0; a < cue.accentIndices.length; a++) {
+                if (cue.accentIndices[a] < words.length) validAccents.push(cue.accentIndices[a]);
+            }
+
+            var cl = tr ? tr.clips[cue.clipIndex] : null;
+            if (cl) {
+                var textProp = findTextComponentProp(cl);
+                if (textProp) {
+                    try { cl.name = encodeSubSplitClipName(words, validAccents); } catch (ne) {}
+                    var payload = buildAppleTextDocPayload(words.join(" "), false, seqW, seqH, validAccents, accentCfg);
+                    textProp.setValue(payload, false);
+                    replacedCount++;
+                }
+            }
+        }
+
+        var refreshed = JSON.parse(getTimelineSubSplitCues());
+        refreshed.replacedCount = replacedCount;
+        return JSON.stringify(refreshed);
+    } catch (e) {
+        return JSON.stringify({ error: e.toString() });
     }
 }
 
@@ -1709,6 +1844,72 @@ function batchUpdateTimelineAccents(mode, accentCfgJson) {
 
             var isLast = (i === infoRes.cues.length - 1);
             var payload = buildAppleTextDocPayload(words.join(" "), false, seqW, seqH, targetAccents, accentCfg);
+            textProp.setValue(payload, isLast);
+            updatedCount++;
+        }
+
+        var refreshed = JSON.parse(getTimelineSubSplitCues());
+        refreshed.updatedCount = updatedCount;
+        return JSON.stringify(refreshed);
+    } catch (e) {
+        return JSON.stringify({ error: e.toString() });
+    }
+}
+
+// Пакетное применение готовых массивов акцентов (например от Ollama AI) в один проход
+function applyBatchTimelineCuesAccents(cuesAccentsJson, accentCfgJson) {
+    try {
+        if (!app.project || !app.project.activeSequence) {
+            return JSON.stringify({ error: "Нет активного таймлайна в Premiere Pro." });
+        }
+        var seq = app.project.activeSequence;
+        var seqW = seq.frameSizeHorizontal || 1080;
+        var seqH = seq.frameSizeVertical || 1920;
+
+        var items = [];
+        try {
+            items = JSON.parse(cuesAccentsJson);
+        } catch (jErr) {
+            return JSON.stringify({ error: "Ошибка парсинга cuesAccentsJson: " + jErr.toString() });
+        }
+        if (!items || !items.length) {
+            return JSON.stringify({ error: "Список фраз для обновления пуст." });
+        }
+
+        var accentCfg = {};
+        if (accentCfgJson && typeof accentCfgJson === "string") {
+            try { accentCfg = JSON.parse(accentCfgJson); } catch (e) {}
+        } else if (accentCfgJson && typeof accentCfgJson === "object") {
+            accentCfg = accentCfgJson;
+        }
+
+        var updatedCount = 0;
+        for (var i = 0; i < items.length; i++) {
+            var item = items[i];
+            var trIdx = item.trackIndex;
+            var clIdx = item.clipIndex;
+            if (typeof trIdx !== "number" || typeof clIdx !== "number") continue;
+            var tr = seq.videoTracks[trIdx];
+            if (!tr || !tr.clips) continue;
+            var cl = tr.clips[clIdx];
+            if (!cl) continue;
+            var textProp = findTextComponentProp(cl);
+            if (!textProp) continue;
+
+            var words = item.words;
+            if (!words || !words.length) {
+                var rawTxt = item.text || cl.name || "";
+                words = splitPhraseIntoWords(rawTxt.replace(/[\r\n\u200B\u2060]+/g, " "));
+            }
+            var targetAccents = item.accentIndices || [];
+
+            try {
+                cl.name = encodeSubSplitClipName(words, targetAccents);
+            } catch (nErr) {}
+
+            var isLast = (i === items.length - 1);
+            var isSec = !!item.isSecondaryTrack;
+            var payload = buildAppleTextDocPayload(words.join(" "), isSec, seqW, seqH, targetAccents, accentCfg);
             textProp.setValue(payload, isLast);
             updatedCount++;
         }

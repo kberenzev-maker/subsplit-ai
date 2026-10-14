@@ -84,13 +84,13 @@
                 <div class="control-block">
                     <div class="control-header">
                         <label for="maxWordsSlider" class="control-label">Слов на экран</label>
-                        <span class="control-badge" id="maxWordsBadge">2 слова · Reels</span>
+                        <span class="control-badge" id="maxWordsBadge">1 слово · Word-by-word</span>
                     </div>
                     <div class="slider-wrapper">
-                        <input type="range" class="apple-slider" id="maxWordsSlider" min="1" max="10" step="1" value="2" aria-label="Количество слов на экран">
+                        <input type="range" class="apple-slider" id="maxWordsSlider" min="1" max="10" step="1" value="1" aria-label="Количество слов на экран">
                         <div class="slider-ticks-row" id="wordsTicksRow">
-                            <span class="slider-tick-label" data-val="1">1</span>
-                            <span class="slider-tick-label active" data-val="2">2 (Reels)</span>
+                            <span class="slider-tick-label active" data-val="1">1</span>
+                            <span class="slider-tick-label" data-val="2">2 (Reels)</span>
                             <span class="slider-tick-label" data-val="3">3</span>
                             <span class="slider-tick-label" data-val="4">4</span>
                             <span class="slider-tick-label" data-val="6">6</span>
@@ -98,24 +98,24 @@
                             <span class="slider-tick-label" data-val="10">10</span>
                         </div>
                     </div>
-                    <input type="hidden" id="maxWordsSelect" value="2">
+                    <input type="hidden" id="maxWordsSelect" value="1">
                 </div>
 
                 <!-- 2. Слайдер: Строк субтитров (1, 2 или 3) -->
                 <div class="control-block">
                     <div class="control-header">
                         <label for="maxLinesSlider" class="control-label">Строк субтитров</label>
-                        <span class="control-badge" id="maxLinesBadge">2 строки · Оптимально</span>
+                        <span class="control-badge" id="maxLinesBadge">1 строка · В одну линию</span>
                     </div>
                     <div class="slider-wrapper">
-                        <input type="range" class="apple-slider" id="maxLinesSlider" min="1" max="3" step="1" value="2" aria-label="Количество строк субтитров">
+                        <input type="range" class="apple-slider" id="maxLinesSlider" min="1" max="3" step="1" value="1" aria-label="Количество строк субтитров">
                         <div class="slider-ticks-row slider-ticks-3" id="linesTicksRow">
-                            <span class="slider-tick-label" data-val="1">1 строка</span>
-                            <span class="slider-tick-label active" data-val="2">2 строки</span>
+                            <span class="slider-tick-label active" data-val="1">1 строка</span>
+                            <span class="slider-tick-label" data-val="2">2 строки</span>
                             <span class="slider-tick-label" data-val="3">3 строки</span>
                         </div>
                     </div>
-                    <input type="hidden" id="maxLinesSelect" value="2">
+                    <input type="hidden" id="maxLinesSelect" value="1">
                 </div>
 
                 <!-- 3. Анимация субтитров (Apple Smooth Motion) -->
@@ -199,14 +199,14 @@
                             </label>
                         </div>
 
-                        <!-- Складной интерактивный выбор слов на таймлайне (Disclosure Group) -->
+                        <!-- Складной интерактивный выбор слов и редактирование текста на таймлайне -->
                         <details class="accent-disclosure" id="accentEditorDetails">
                             <summary class="accent-disclosure-summary">
                                 <div class="accent-disclosure-title">
                                     <svg class="sf-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                                         <path d="M11.5 2.5L13.5 4.5M2.5 13.5L3.5 9.5L12 1L15 4L6.5 12.5L2.5 13.5Z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
                                     </svg>
-                                    <span>Редактор слов на таймлайне</span>
+                                    <span>Редактор текста и акцентов</span>
                                 </div>
                                 <div class="accent-disclosure-right">
                                     <span class="accent-cue-badge" id="accentCueBadge">0 фраз</span>
@@ -217,16 +217,35 @@
                             </summary>
                             <div class="accent-disclosure-body">
                                 <div class="accent-editor-actions">
-                                    <span class="accent-editor-hint">Кликните по слову для акцента:</span>
+                                    <!-- Переключатель режима: Акценты по словам или Прямое редактирование текста -->
+                                    <div class="segmented-chips-group chips-editor-mode" id="editorModeGroup" role="group" aria-label="Режим работы с субтитрами">
+                                        <button type="button" class="chip-mode active" id="btnModeAccents" title="Выделение акцентных слов кликом">✦ Акценты</button>
+                                        <button type="button" class="chip-mode" id="btnModeText" title="Прямое редактирование текста фраз">✏️ Текст</button>
+                                    </div>
                                     <div class="accent-btn-group">
+                                        <button type="button" id="btnToggleFindReplace" class="btn-mini" title="Найти и заменить слово во всех фразах">🔍 Замена</button>
                                         <button type="button" id="btnLoadTimelineWords" class="btn-mini" title="Считать субтитры с таймлайна">С таймлайна</button>
-                                        <button type="button" id="btnAutoAccentTimeline" class="btn-mini btn-mini-accent" title="Автоматически выделить главные слова">⚡ Авто</button>
+                                        <button type="button" id="btnAutoAccentTimeline" class="btn-mini btn-mini-accent" title="AI Ollama сама выберет смысловые и эмоциональные акценты в субтитрах">⚡ AI Авто</button>
                                         <button type="button" id="btnClearAccentTimeline" class="btn-mini" title="Сбросить акценты со всех слов">Сброс</button>
                                     </div>
                                 </div>
+
+                                <!-- Быстрый поиск и замена слов на таймлайне -->
+                                <div class="find-replace-bar" id="findReplaceBar" style="display: none;">
+                                    <div class="find-replace-inputs">
+                                        <input type="text" id="findInput" class="find-input" placeholder="Найти..." spellcheck="false" aria-label="Искать слово">
+                                        <span class="find-arrow" aria-hidden="true">→</span>
+                                        <input type="text" id="replaceInput" class="find-input" placeholder="Заменить на..." spellcheck="false" aria-label="Заменить на слово">
+                                    </div>
+                                    <div class="find-replace-actions">
+                                        <button type="button" id="btnExecuteReplace" class="btn-mini btn-mini-accent" title="Заменить во всех клипах на таймлайне">Заменить</button>
+                                        <button type="button" id="btnCloseFindReplace" class="btn-mini" title="Скрыть панель поиска">✕</button>
+                                    </div>
+                                </div>
+
                                 <div id="accentPhrasesList" class="accent-phrases-list">
                                     <div class="accent-phrases-empty">
-                                        Нажмите «С таймлайна» или создайте субтитры, чтобы выбирать слова кликом.
+                                        Нажмите «С таймлайна» или создайте субтитры, чтобы редактировать текст и выбирать слова.
                                     </div>
                                 </div>
                             </div>
@@ -296,14 +315,14 @@
                     <div class="control-block">
                         <div class="control-header">
                             <label class="control-label">Скрыть пунктуацию</label>
-                            <span class="control-status" id="punctStatusText">Все знаки сохранены</span>
+                            <span class="control-status" id="punctStatusText">Удаляются все знаки</span>
                         </div>
                         <div class="segmented-chips-group chips-punct" role="group" aria-label="Фильтр знаков">
-                            <button type="button" class="chip chip-all" data-char="all" id="chipAll" title="Убрать всю пунктуацию">Все</button>
-                            <button type="button" class="chip" data-char="." title="Убрать точки">.</button>
-                            <button type="button" class="chip" data-char="," title="Убрать запятые">,</button>
-                            <button type="button" class="chip" data-char="?" title="Убрать знаки вопроса">?</button>
-                            <button type="button" class="chip" data-char="!" title="Убрать восклицательные знаки">!</button>
+                            <button type="button" class="chip chip-all active" data-char="all" id="chipAll" title="Убрать всю пунктуацию">Все</button>
+                            <button type="button" class="chip active" data-char="." title="Убрать точки">.</button>
+                            <button type="button" class="chip active" data-char="," title="Убрать запятые">,</button>
+                            <button type="button" class="chip active" data-char="?" title="Убрать знаки вопроса">?</button>
+                            <button type="button" class="chip active" data-char="!" title="Убрать восклицательные знаки">!</button>
                         </div>
                     </div>
 

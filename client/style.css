@@ -1324,17 +1324,129 @@ details[open] > summary .disclosure-chevron {
     border-color: rgba(255, 214, 10, 0.55);
 }
 
+.btn-mini-accent.has-ai {
+    background: linear-gradient(135deg, rgba(175, 82, 222, 0.22), rgba(255, 214, 10, 0.2));
+    border-color: rgba(175, 82, 222, 0.45);
+    color: #ffd60a;
+    box-shadow: 0 0 8px rgba(175, 82, 222, 0.25);
+}
+
+.btn-mini-accent.has-ai:hover {
+    background: linear-gradient(135deg, rgba(175, 82, 222, 0.32), rgba(255, 214, 10, 0.3));
+    border-color: rgba(175, 82, 222, 0.65);
+    box-shadow: 0 0 12px rgba(175, 82, 222, 0.4);
+}
+
 /* Disabled state when 1 line is selected */
 .cat-checkbox-item.disabled {
     opacity: 0.45;
     pointer-events: none;
 }
 
+/* Mode Segmented Switcher (Accents vs Text) */
+.chips-editor-mode {
+    display: inline-flex;
+    gap: 2px;
+    background: rgba(0, 0, 0, 0.32);
+    padding: 2px;
+    border-radius: 6px;
+    border: 0.5px solid var(--border-subtle);
+}
+
+.chip-mode {
+    height: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 0.5px solid transparent;
+    color: var(--text-secondary);
+    border-radius: 4.5px;
+    font-size: 10px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--transition-fast);
+    padding: 0 8px;
+    white-space: nowrap;
+}
+
+.chip-mode:hover:not(.active) {
+    color: var(--text-primary);
+    background-color: rgba(255, 255, 255, 0.06);
+}
+
+.chip-mode.active {
+    background: var(--bg-pill-elevated);
+    color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.16);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    font-weight: 600;
+}
+
+/* Find & Replace Bar */
+.find-replace-bar {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    background: rgba(0, 0, 0, 0.42);
+    border: 0.5px solid rgba(255, 255, 255, 0.14);
+    border-radius: 7px;
+    padding: 7px 8px;
+    box-sizing: border-box;
+    width: 100%;
+    animation: fadeInDisclosure 0.15s ease-out;
+}
+
+.find-replace-inputs {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.find-input {
+    flex: 1 1 0;
+    min-width: 0;
+    width: 0;
+    height: 25px;
+    background: rgba(255, 255, 255, 0.07);
+    border: 0.5px solid rgba(255, 255, 255, 0.14);
+    border-radius: 5px;
+    color: var(--text-primary);
+    font-size: 11px;
+    padding: 0 7px;
+    outline: none;
+    box-sizing: border-box;
+    transition: var(--transition-fast);
+}
+
+.find-input:focus {
+    border-color: var(--accent-blue);
+    background: rgba(255, 255, 255, 0.12);
+    box-shadow: 0 0 0 2px rgba(10, 132, 255, 0.22);
+}
+
+.find-arrow {
+    color: var(--text-muted);
+    font-size: 11px;
+    flex-shrink: 0;
+}
+
+.find-replace-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
 .accent-phrases-list {
     display: flex;
     flex-direction: column;
     gap: 5px;
-    max-height: 155px;
+    max-height: 220px;
     overflow-y: auto;
     padding-right: 2px;
 }
@@ -1343,7 +1455,7 @@ details[open] > summary .disclosure-chevron {
     font-size: var(--font-2xs);
     color: var(--text-muted);
     text-align: center;
-    padding: 10px 6px;
+    padding: 12px 6px;
     line-height: 1.4;
 }
 
@@ -1355,14 +1467,29 @@ details[open] > summary .disclosure-chevron {
     border: 0.5px solid rgba(255, 255, 255, 0.06);
     border-radius: 6px;
     padding: 4px 6px;
+    transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.accent-phrase-row:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.12);
 }
 
 .accent-phrase-tc {
     font-family: "SF Mono", ui-monospace, Menlo, monospace;
     font-size: 9.5px;
     color: var(--text-muted);
-    min-width: 36px;
+    min-width: 38px;
     flex-shrink: 0;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 4px;
+    transition: var(--transition-fast);
+}
+
+.accent-phrase-tc:hover {
+    color: var(--accent-blue);
+    background: rgba(10, 132, 255, 0.14);
 }
 
 .accent-phrase-words {
@@ -1370,6 +1497,7 @@ details[open] > summary .disclosure-chevron {
     flex-wrap: wrap;
     gap: 4px;
     flex: 1;
+    min-width: 0;
 }
 
 .word-accent-pill {
@@ -1397,6 +1525,60 @@ details[open] > summary .disclosure-chevron {
     font-weight: 700;
     transform: scale(1.04);
     box-shadow: 0 1px 5px rgba(255, 214, 10, 0.25);
+}
+
+/* Full phrase text input */
+.phrase-text-input {
+    flex: 1;
+    min-width: 0;
+    height: 25px;
+    background: rgba(0, 0, 0, 0.35);
+    border: 0.5px solid rgba(255, 255, 255, 0.14);
+    border-radius: 5px;
+    color: var(--text-primary);
+    font-size: 11.5px;
+    font-weight: 500;
+    padding: 0 7px;
+    outline: none;
+    transition: all var(--transition-fast);
+}
+
+.phrase-text-input:focus {
+    border-color: var(--accent-blue);
+    background: rgba(0, 0, 0, 0.55);
+    box-shadow: 0 0 0 2px rgba(10, 132, 255, 0.22);
+}
+
+/* Inline single-phrase editor in accents mode */
+.phrase-inline-edit {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex: 1;
+    min-width: 0;
+}
+
+.btn-phrase-edit {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    border-radius: 4px;
+    cursor: pointer;
+    flex-shrink: 0;
+    opacity: 0.45;
+    transition: all var(--transition-fast);
+}
+
+.accent-phrase-row:hover .btn-phrase-edit,
+.btn-phrase-edit:hover {
+    opacity: 1;
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.08);
 }
 
 /* --------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 {
-  "version": "1.0.3",
-  "build": 4,
-  "releaseName": "Crash-Free Color Picker & Timeline Cues Persistence",
+  "version": "1.1.0",
+  "build": 5,
+  "releaseName": "AI Auto Accents, Timeline Text Editor & Literary Translation",
   "releaseDate": "2026-10-14",
-  "description": "Встроенная всплывающая палитра цвета и надежное сохранение/распознавание слоев субтитров при перезапуске Premiere Pro"
+  "description": "AI-выбор акцентов через Ollama, редактор текста и поиск/замена на таймлайне, литературный перевод без калек и дефолты: 1 слово, 1 строка, без знаков"
 }

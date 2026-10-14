@@ -97,6 +97,11 @@ COMPOUND_PAIRS = {
     ("к", "тому"),
     ("тем", "не"),
     ("не", "менее"),
+    ("не", "о"),
+    ("ни", "о"),
+    ("о", "чем"),
+    ("а", "что"),
+    ("и", "что"),
     ("в", "том"),
     ("вместе", "с"),
     ("рядом", "с"),
@@ -112,6 +117,8 @@ COMPOUND_PAIRS = {
 ALLOWED_HANGING_END_PAIRS = {
     ("ну", "что"),
     ("ну", "и"),
+    ("а", "что"),
+    ("и", "что"),
     ("так", "что"),
     ("да", "и"),
     ("как", "и"),
@@ -376,12 +383,12 @@ def balance_text_lines(text: str, max_lines: int = 2) -> str:
     if len(tokens) <= 1 or max_lines <= 1:
         return " ".join(tokens)
 
-    # Если текст короткий и влезает в одну строку, не разбиваем принудительно
-    if len(text) <= 20 and len(tokens) <= 2:
-        return text
+    # Если текст короткий и свободно влезает в одну строку, не разбиваем принудительно
+    if len(text) <= 18:
+        return " ".join(tokens)
 
     if max_lines == 2:
-        best_i = 1
+        best_i = -1
         best_diff = 999999
         for i in range(1, len(tokens)):
             # Не разрываем в конце строки предлоги
@@ -393,11 +400,13 @@ def balance_text_lines(text: str, max_lines: int = 2) -> str:
             if diff < best_diff:
                 best_diff = diff
                 best_i = i
+        if best_i == -1:
+            return " ".join(tokens)
         return " ".join(tokens[:best_i]) + "\n" + " ".join(tokens[best_i:])
     elif max_lines >= 3:
         if len(tokens) <= 2:
             return " ".join(tokens)
-        best_i, best_j = 1, 2
+        best_i, best_j = -1, -1
         best_diff = 999999
         for i in range(1, len(tokens) - 1):
             if is_hanging(tokens[i - 1]):
@@ -413,6 +422,8 @@ def balance_text_lines(text: str, max_lines: int = 2) -> str:
                     best_diff = diff
                     best_i = i
                     best_j = j
+        if best_i == -1 or best_j == -1:
+            return " ".join(tokens)
         return " ".join(tokens[:best_i]) + "\n" + " ".join(tokens[best_i:best_j]) + "\n" + " ".join(tokens[best_j:])
     return text
 
@@ -474,7 +485,7 @@ def chunk_words(
     dp[n] = 0
 
     for i in range(n - 1, -1, -1):
-        max_k = max_words + 1
+        max_k = max(max_words + 1, 3)
 
         for k in range(max_k, 0, -1):
             if i + k > n:
@@ -487,6 +498,8 @@ def chunk_words(
 
             if k > max_words:
                 starts_short_proclitic = is_hangs[i] and len(cleans[i]) <= 3
+                if k >= max_words + 2:
+                    starts_short_proclitic = starts_short_proclitic and is_hangs[i + 1] and len(cleans[i + 1]) <= 3
                 raw_len = sum(len(texts[idx]) for idx in range(i, i + k)) + (k - 1)
                 allowed_content_limit = max(1, max_words - 1)
                 if not (starts_short_proclitic and num_content <= allowed_content_limit and raw_len <= 28):
@@ -506,7 +519,7 @@ def chunk_words(
                 cost += 1_000_000
 
             # Правило 2: Запрет висячего предлога/союза в конце блока
-            if i + k < n and is_hangs[i + k - 1] and (k > 1 or max_words > 1):
+            if i + k < n and is_hangs[i + k - 1]:
                 if k >= 2 and allows_hanging_pair[i + k - 2]:
                     pass
                 else:
